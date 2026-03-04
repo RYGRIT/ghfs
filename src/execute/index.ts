@@ -1,7 +1,7 @@
 import type { Octokit } from 'octokit'
 import type { ExecutionResult, GhfsResolvedConfig, IssueKind } from '../types'
 import type { PendingOp } from './types'
-// @env node
+import process from 'node:process'
 import { cancel, confirm, isCancel, multiselect } from '@clack/prompts'
 import { createGitHubClient } from '../github/client'
 import { readAndValidateExecuteFile } from './validate'
@@ -14,6 +14,7 @@ export interface ExecuteOptions {
   apply: boolean
   nonInteractive: boolean
   continueOnError: boolean
+  onPlan?: (ops: PendingOp[]) => void
 }
 
 export async function executePendingChanges(options: ExecuteOptions): Promise<ExecutionResult> {
@@ -40,7 +41,7 @@ export async function executePendingChanges(options: ExecuteOptions): Promise<Ex
     }
   }
 
-  printPlan(selected.map(item => item.op))
+  options.onPlan?.(selected.map(item => item.op))
 
   if (!options.apply) {
     return {
@@ -327,12 +328,6 @@ async function confirmApply(count: number): Promise<boolean> {
   }
 
   return result
-}
-
-function printPlan(ops: PendingOp[]): void {
-  console.log(`Planned operations (${ops.length}):`)
-  for (const [index, op] of ops.entries())
-    console.log(`- ${index + 1}. ${describeAction(op)}`)
 }
 
 function ensurePullAction(action: PendingOp['action'], number: number, isPull: boolean): void {

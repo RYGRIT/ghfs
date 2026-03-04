@@ -1,6 +1,6 @@
 import type { RepoDetectionCandidate, RepoResolutionResult } from '../types'
-// @env node
 import { execFile } from 'node:child_process'
+import process from 'node:process'
 import { promisify } from 'node:util'
 import { cancel, isCancel, select } from '@clack/prompts'
 import { exists, readTextFile } from '../utils/fs'

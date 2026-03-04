@@ -1,4 +1,3 @@
-// @env node
 import type { Octokit } from 'octokit'
 import type { GhfsResolvedConfig, IssueKind, IssueState, SyncState } from '../types'
 import { rm } from 'node:fs/promises'

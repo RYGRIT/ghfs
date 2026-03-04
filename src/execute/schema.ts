@@ -1,4 +1,3 @@
-// @env node
 import { join } from 'node:path'
 import { EXECUTE_SCHEMA_RELATIVE_PATH } from '../constants'
 import { writeTextFile } from '../utils/fs'

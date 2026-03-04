@@ -1,4 +1,3 @@
-// @env node
 import type { GhfsResolvedConfig } from '../types'
 import { resolve } from 'node:path'
 import { loadSyncState } from './state'
@@ -44,17 +43,5 @@ export async function getStatusSummary(config: GhfsResolvedConfig): Promise<Stat
           failed: lastExecution.failed,
         }
       : undefined,
-  }
-}
-
-export function printStatus(summary: StatusSummary): void {
-  console.log('ghfs status')
-  console.log(`- repo: ${summary.repo ?? '(not resolved yet)'}`)
-  console.log(`- last sync: ${summary.lastSyncedAt ?? '(never)'}`)
-  console.log(`- tracked items: ${summary.totalTracked} (open=${summary.openCount}, closed=${summary.closedCount})`)
-  console.log(`- execution runs: ${summary.executionRuns}`)
-  if (summary.lastExecution) {
-    console.log(`- last execution: ${summary.lastExecution.runId} at ${summary.lastExecution.createdAt}`)
-    console.log(`  mode=${summary.lastExecution.mode} planned=${summary.lastExecution.planned} applied=${summary.lastExecution.applied} failed=${summary.lastExecution.failed}`)
   }
 }

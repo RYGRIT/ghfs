@@ -1,7 +1,7 @@
 import type { GhfsResolvedConfig, GhfsUserConfig } from './types'
-// @env node
 import { existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
+import process from 'node:process'
 import { createJiti } from 'jiti'
 import {
   CONFIG_FILE_CANDIDATES,

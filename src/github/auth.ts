@@ -1,5 +1,5 @@
-// @env node
 import { execFile } from 'node:child_process'
+import process from 'node:process'
 import { promisify } from 'node:util'
 import { cancel, isCancel, password } from '@clack/prompts'
 import { DEFAULT_TOKEN_ENV } from '../constants'

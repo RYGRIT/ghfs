@@ -1,4 +1,3 @@
-// @env node
 import type { ExecutionResult, SyncState } from '../types'
 import { readFile, writeFile } from 'node:fs/promises'
 import { join } from 'node:path'
