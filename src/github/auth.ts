@@ -2,7 +2,6 @@ import { execFile } from 'node:child_process'
 import process from 'node:process'
 import { promisify } from 'node:util'
 import { cancel, isCancel, password } from '@clack/prompts'
-import { DEFAULT_TOKEN_ENV } from '../constants'
 
 const execFileAsync = promisify(execFile)
 
@@ -20,7 +19,7 @@ export async function resolveAuthToken(options: ResolveTokenOptions): Promise<st
   if (token)
     return token
 
-  const envToken = readTokenFromEnv(DEFAULT_TOKEN_ENV)
+  const envToken = await readTokenFromEnv()
   if (envToken)
     return envToken
 
@@ -41,8 +40,11 @@ async function readTokenFromGhCli(): Promise<string | undefined> {
   }
 }
 
-function readTokenFromEnv(envNames: readonly string[]): string | undefined {
-  for (const name of envNames) {
+async function readTokenFromEnv(): Promise<string | undefined> {
+  // load .env file
+  await import('dotenv').then(mod => mod.config())
+  // get token from environment variables
+  for (const name of ['GH_TOKEN', 'GITHUB_TOKEN']) {
     const value = process.env[name]?.trim()
     if (value)
       return value

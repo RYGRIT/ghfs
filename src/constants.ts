@@ -7,8 +7,6 @@ export const CONFIG_FILE_CANDIDATES = [
 ] as const
 
 export const DEFAULT_STORAGE_DIR = '.ghfs'
-export const DEFAULT_EXECUTE_FILE = '.ghfs/execute.yml'
-export const DEFAULT_TOKEN_ENV = ['GH_TOKEN', 'GITHUB_TOKEN'] as const
 
 export const ISSUE_DIR_NAME = 'issues'
 export const CLOSED_DIR_NAME = 'closed'
