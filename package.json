@@ -1,0 +1,46 @@
+{
+  "name": "ghfs",
+  "type": "module",
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.30.3",
+  "description": "Mirror GitHub issues and PRs to local markdown files and execute batch maintainer actions.",
+  "exports": {
+    ".": "./dist/index.mjs",
+    "./cli": "./dist/cli.mjs",
+    "./package.json": "./package.json"
+  },
+  "types": "./dist/index.d.mts",
+  "bin": {
+    "ghfs": "./dist/cli.mjs"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "lint": "eslint",
+    "schema": "tsx src/cli.ts schema"
+  },
+  "dependencies": {
+    "@clack/prompts": "^1.1.0",
+    "@octokit/plugin-retry": "^8.1.0",
+    "@octokit/plugin-throttling": "^11.0.3",
+    "cac": "^7.0.0",
+    "jiti": "^2.6.1",
+    "octokit": "^5.0.5",
+    "valibot": "^1.1.0",
+    "yaml": "^2.8.2"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^7.6.1",
+    "@types/node": "^25.3.3",
+    "eslint": "^10.0.2",
+    "tsdown": "^0.20.3",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.0.18"
+  }
+}
