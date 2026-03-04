@@ -26,12 +26,18 @@ import { defineConfig } from '@ghfs/cli'
 
 export default defineConfig({
   repo: 'owner/name',
-  storageDir: '.ghfs',
-  executeFile: '.ghfs/execute.yml',
+  directory: '.ghfs',
+  auth: {
+    token: process.env.GITHUB_TOKEN,
+  },
+  sync: {
+    closed: 'existing',
+    patches: 'open',
+  },
 })
 ```
 
-Precedence: `CLI flags > ghfs.config.ts > auto-detect (.git/package.json) > .ghfs/.sync.json`.
+Precedence: `CLI flags > ghfs.config.ts > auto-detect (.git/package.json)`.
 
 ## Local Files
 

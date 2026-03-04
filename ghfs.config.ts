@@ -1,21 +1,11 @@
 export default {
   // repo: 'owner/name',
-  storageDir: '.ghfs',
-  executeFile: '.ghfs/execute.yml',
+  directory: '.ghfs',
   auth: {
-    preferGhCli: true,
-    tokenEnv: ['GH_TOKEN', 'GITHUB_TOKEN'],
-  },
-  detectRepo: {
-    fromGit: true,
-    fromPackageJson: true,
+    // token: process.env.GH_TOKEN,
   },
   sync: {
-    includeClosed: true,
-    writePrPatch: true,
-    deleteClosedPrPatch: true,
-  },
-  cli: {
-    interactiveExecuteInTTY: true,
+    closed: 'existing',
+    patches: 'open',
   },
 }

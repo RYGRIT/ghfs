@@ -2,23 +2,25 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { cancel, isCancel, password } from '@clack/prompts'
+import { DEFAULT_TOKEN_ENV } from '../constants'
 
 const execFileAsync = promisify(execFile)
 
 export interface ResolveTokenOptions {
-  preferGhCli: boolean
-  tokenEnv: string[]
+  token?: string
   interactive: boolean
 }
 
 export async function resolveAuthToken(options: ResolveTokenOptions): Promise<string> {
-  if (options.preferGhCli) {
-    const token = await readTokenFromGhCli()
-    if (token)
-      return token
-  }
+  const configuredToken = options.token?.trim()
+  if (configuredToken)
+    return configuredToken
 
-  const envToken = readTokenFromEnv(options.tokenEnv)
+  const token = await readTokenFromGhCli()
+  if (token)
+    return token
+
+  const envToken = readTokenFromEnv(DEFAULT_TOKEN_ENV)
   if (envToken)
     return envToken
 
@@ -39,7 +41,7 @@ async function readTokenFromGhCli(): Promise<string | undefined> {
   }
 }
 
-function readTokenFromEnv(envNames: string[]): string | undefined {
+function readTokenFromEnv(envNames: readonly string[]): string | undefined {
   for (const name of envNames) {
     const value = process.env[name]?.trim()
     if (value)

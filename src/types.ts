@@ -2,50 +2,57 @@ export type IssueKind = 'issue' | 'pull'
 export type IssueState = 'open' | 'closed'
 
 export interface GhfsUserConfig {
+  /**
+   * The repository to sync.
+   *
+   * Will try to detect the repository from the current working directory or the `package.json` file.
+   */
   repo?: string
-  storageDir?: string
-  executeFile?: string
+  /**
+   * The directory to store the synced issues and pull requests.
+   *
+   * @default '.ghfs'
+   */
+  directory?: string
+  /**
+   * The authentication configuration.
+   */
   auth?: {
-    preferGhCli?: boolean
-    tokenEnv?: string[]
-  }
-  detectRepo?: {
-    fromGit?: boolean
-    fromPackageJson?: boolean
+    /**
+     * The GitHub personal access token to use for authentication.
+     *
+     * When not provided, will try to get the token from `gh auth token` or the environment variables `GH_TOKEN` or `GITHUB_TOKEN`.
+     */
+    token?: string
   }
   sync?: {
-    includeClosed?: boolean
-    writePrPatch?: boolean
-    deleteClosedPrPatch?: boolean
-  }
-  cli?: {
-    interactiveExecuteInTTY?: boolean
+    /**
+     * When to sync closed issues and pull requests.
+     *
+     * - `'existing'`: only sync closed issues and pull requests that already exist in the local filesystem.
+     * - `'all'`: sync all closed issues and pull requests.
+     * - `false`: don't sync any closed issues and pull requests. And delete any existing closed issues and pull requests from the local filesystem.
+     *
+     * @default 'existing'
+     */
+    closed?: 'existing' | 'all' | false
+    /**
+     * When to download the pull request patch files.
+     *
+     * - `'open'`: only download open pull request patch files.
+     * - `'all'`: download all pull request patch files.
+     * - `false`: don't download any pull request patch files.
+     *
+     * @default 'open'
+     */
+    patches?: 'open' | 'all' | false
   }
 }
 
-export interface GhfsResolvedConfig {
+export type GhfsResolvedConfig = Required<GhfsUserConfig> & {
   cwd: string
-  repo?: string
-  storageDir: string
-  storageDirAbsolute: string
-  executeFile: string
-  executeFileAbsolute: string
-  auth: {
-    preferGhCli: boolean
-    tokenEnv: string[]
-  }
-  detectRepo: {
-    fromGit: boolean
-    fromPackageJson: boolean
-  }
-  sync: {
-    includeClosed: boolean
-    writePrPatch: boolean
-    deleteClosedPrPatch: boolean
-  }
-  cli: {
-    interactiveExecuteInTTY: boolean
-  }
+  auth: Required<GhfsUserConfig['auth']>
+  sync: Required<GhfsUserConfig['sync']>
 }
 
 export interface RepoDetectionCandidate {
@@ -56,7 +63,7 @@ export interface RepoDetectionCandidate {
 
 export interface RepoResolutionResult {
   repo: string
-  source: 'cli' | 'config' | 'git' | 'package-json' | 'sync-state'
+  source: 'cli' | 'config' | 'git' | 'package-json'
   candidates: RepoDetectionCandidate[]
 }
 

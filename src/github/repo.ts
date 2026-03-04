@@ -11,9 +11,6 @@ export interface ResolveRepoOptions {
   cwd: string
   cliRepo?: string
   configRepo?: string
-  detectFromGit: boolean
-  detectFromPackageJson: boolean
-  syncStateRepo?: string
   interactive: boolean
 }
 
@@ -41,8 +38,8 @@ export async function resolveRepo(options: ResolveRepoOptions): Promise<RepoReso
   }
 
   const candidates: RepoDetectionCandidate[] = []
-  const gitCandidate = options.detectFromGit ? await detectRepoFromGit(options.cwd) : undefined
-  const pkgCandidate = options.detectFromPackageJson ? await detectRepoFromPackageJson(options.cwd) : undefined
+  const gitCandidate = await detectRepoFromGit(options.cwd)
+  const pkgCandidate = await detectRepoFromPackageJson(options.cwd)
 
   if (gitCandidate)
     candidates.push(gitCandidate)
@@ -73,14 +70,6 @@ export async function resolveRepo(options: ResolveRepoOptions): Promise<RepoReso
     return {
       repo: pkgCandidate.repo,
       source: 'package-json',
-      candidates,
-    }
-  }
-
-  if (options.syncStateRepo) {
-    return {
-      repo: options.syncStateRepo,
-      source: 'sync-state',
       candidates,
     }
   }

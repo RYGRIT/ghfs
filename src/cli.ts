@@ -2,13 +2,12 @@
 // @env node
 import { resolve } from 'node:path'
 import { cac } from 'cac'
-import { resolveConfig } from './config'
+import { getExecuteFile, getStorageDirAbsolute, resolveConfig } from './config'
 import { executePendingChanges } from './execute'
 import { writeExecuteSchema } from './execute/schema'
 import { resolveAuthToken } from './github/auth'
 import { resolveRepo } from './github/repo'
 import { appendExecutionResult, syncRepository } from './sync'
-import { loadSyncState } from './sync/state'
 import { getStatusSummary, printStatus } from './sync/status'
 
 interface SyncCommandOptions {
@@ -39,25 +38,21 @@ cli
   .option('--continue-on-error', 'Continue applying ops after a failure')
   .action(withErrorHandling(async (options: ExecuteCommandOptions) => {
     const config = await resolveConfig()
-    const syncState = await loadSyncState(config.storageDirAbsolute)
+    const storageDirAbsolute = getStorageDirAbsolute(config)
 
     const repo = await resolveRepo({
       cwd: config.cwd,
       cliRepo: options.repo,
       configRepo: config.repo,
-      detectFromGit: config.detectRepo.fromGit,
-      detectFromPackageJson: config.detectRepo.fromPackageJson,
-      syncStateRepo: syncState.repo,
       interactive: process.stdin.isTTY && !options.nonInteractive,
     })
 
     const token = await resolveAuthToken({
-      preferGhCli: config.auth.preferGhCli,
-      tokenEnv: config.auth.tokenEnv,
+      token: config.auth.token,
       interactive: process.stdin.isTTY && !options.nonInteractive,
     })
 
-    const executeFilePath = resolve(config.cwd, options.file ?? config.executeFile)
+    const executeFilePath = resolve(config.cwd, options.file ?? getExecuteFile(config))
     const result = await executePendingChanges({
       config,
       repo: repo.repo,
@@ -68,7 +63,7 @@ cli
       continueOnError: Boolean(options.continueOnError),
     })
 
-    await appendExecutionResult(config.storageDirAbsolute, result)
+    await appendExecutionResult(storageDirAbsolute, result)
 
     console.log(`Execution ${result.mode} finished. planned=${result.planned} applied=${result.applied} failed=${result.failed}`)
     for (const detail of result.details)
@@ -90,7 +85,7 @@ cli
   .command('schema', 'Write execute schema to .ghfs/schema/execute.schema.json')
   .action(withErrorHandling(async () => {
     const config = await resolveConfig()
-    const schemaPath = await writeExecuteSchema(config.storageDirAbsolute)
+    const schemaPath = await writeExecuteSchema(getStorageDirAbsolute(config))
     console.log(schemaPath)
   }))
 
@@ -105,21 +100,16 @@ function setupSyncCommand(command: ReturnType<typeof cli.command>): void {
     .option('--full', 'Full sync ignoring previous cursor')
     .action(withErrorHandling(async (options: SyncCommandOptions) => {
       const config = await resolveConfig()
-      const syncState = await loadSyncState(config.storageDirAbsolute)
 
       const repo = await resolveRepo({
         cwd: config.cwd,
         cliRepo: options.repo,
         configRepo: config.repo,
-        detectFromGit: config.detectRepo.fromGit,
-        detectFromPackageJson: config.detectRepo.fromPackageJson,
-        syncStateRepo: syncState.repo,
         interactive: process.stdin.isTTY,
       })
 
       const token = await resolveAuthToken({
-        preferGhCli: config.auth.preferGhCli,
-        tokenEnv: config.auth.tokenEnv,
+        token: config.auth.token,
         interactive: process.stdin.isTTY,
       })
 

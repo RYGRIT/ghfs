@@ -1,7 +1,8 @@
 // @env node
 import type { Octokit } from 'octokit'
 import type { GhfsResolvedConfig, IssueKind, IssueState, SyncState } from '../types'
-import { basename } from 'node:path'
+import { rm } from 'node:fs/promises'
+import { basename, resolve } from 'node:path'
 import { createGitHubClient } from '../github/client'
 import { ensureDir, exists, moveFile, removeFile, writeTextFile } from '../utils/fs'
 import { renderIssueMarkdown } from './markdown'
@@ -72,14 +73,15 @@ interface GitHubPull {
 export async function syncRepository(options: SyncOptions): Promise<SyncSummary> {
   const { owner, repo } = splitRepo(options.repo)
   const octokit = createGitHubClient(options.token)
+  const storageDirAbsolute = resolve(options.config.cwd, options.config.directory)
 
-  await ensureStorageStructure(options.config.storageDirAbsolute)
-  const syncState = await loadSyncState(options.config.storageDirAbsolute)
+  await ensureStorageStructure(storageDirAbsolute)
+  const syncState = await loadSyncState(storageDirAbsolute)
 
   const since = resolveSince(options, syncState)
   const syncedAt = new Date().toISOString()
 
-  const listState = options.config.sync.includeClosed ? 'all' : 'open'
+  const listState = 'all'
   const issues = await octokit.paginate(octokit.rest.issues.listForRepo, {
     owner,
     repo,
@@ -95,10 +97,40 @@ export async function syncRepository(options: SyncOptions): Promise<SyncSummary>
   let patchesWritten = 0
   let patchesDeleted = 0
 
+  if (options.config.sync.closed === false) {
+    patchesDeleted += await pruneTrackedClosedItems(storageDirAbsolute, syncState)
+  }
+
   for (const issue of issues) {
     const number = issue.number
     const kind: IssueKind = issue.pull_request ? 'pull' : 'issue'
     const state: IssueState = issue.state === 'closed' ? 'closed' : 'open'
+
+    const closedPath = getClosedIssueMarkdownPath(storageDirAbsolute, number)
+    const openPath = getIssueMarkdownPath(storageDirAbsolute, number, 'open')
+    const hasClosedFile = await exists(closedPath)
+    const hasOpenFile = await exists(openPath)
+    const hasLocalFile = hasOpenFile || hasClosedFile
+
+    if (state === 'closed') {
+      if (options.config.sync.closed === false) {
+        if (hasOpenFile)
+          await removeFile(openPath)
+        if (hasClosedFile)
+          await removeFile(closedPath)
+        if (kind === 'pull')
+          patchesDeleted += await removePatchIfExists(storageDirAbsolute, number)
+        delete syncState.items[String(number)]
+        continue
+      }
+
+      if (options.config.sync.closed === 'existing' && !hasLocalFile) {
+        delete syncState.items[String(number)]
+        if (kind === 'pull' && options.config.sync.patches !== 'all')
+          patchesDeleted += await removePatchIfExists(storageDirAbsolute, number)
+        continue
+      }
+    }
 
     const comments = await octokit.paginate(octokit.rest.issues.listComments, {
       owner,
@@ -136,16 +168,13 @@ export async function syncRepository(options: SyncOptions): Promise<SyncSummary>
       pr: pull,
     })
 
-    const targetPath = getIssueMarkdownPath(options.config.storageDirAbsolute, number, state)
-    const closedPath = getClosedIssueMarkdownPath(options.config.storageDirAbsolute, number)
-    const openPath = getIssueMarkdownPath(options.config.storageDirAbsolute, number, 'open')
-
-    if (state === 'open' && await exists(closedPath)) {
+    const targetPath = getIssueMarkdownPath(storageDirAbsolute, number, state)
+    if (state === 'open' && hasClosedFile) {
       await moveFile(closedPath, openPath)
       moved += 1
     }
 
-    if (state === 'closed' && await exists(openPath)) {
+    if (state === 'closed' && hasOpenFile) {
       await moveFile(openPath, closedPath)
       moved += 1
     }
@@ -153,28 +182,29 @@ export async function syncRepository(options: SyncOptions): Promise<SyncSummary>
     await writeTextFile(targetPath, markdown)
     written += 1
 
-    const patchPath = getPrPatchPath(options.config.storageDirAbsolute, number)
+    const patchPath = getPrPatchPath(storageDirAbsolute, number)
+    const shouldWritePatch = kind === 'pull' && (
+      options.config.sync.patches === 'all'
+      || (options.config.sync.patches === 'open' && state === 'open')
+    )
+    const shouldDeletePatch = kind === 'pull' && !shouldWritePatch
 
-    if (kind === 'pull' && options.config.sync.writePrPatch && state === 'open') {
+    if (shouldWritePatch) {
       const patch = await downloadPullPatch(octokit, owner, repo, number)
       await writeTextFile(patchPath, patch)
       patchesWritten += 1
     }
 
-    if (kind === 'pull' && state === 'closed' && options.config.sync.deleteClosedPrPatch) {
-      if (await exists(patchPath)) {
-        await removeFile(patchPath)
-        patchesDeleted += 1
-      }
-    }
+    if (shouldDeletePatch)
+      patchesDeleted += await removePatchIfExists(storageDirAbsolute, number)
 
     syncState.items[String(number)] = {
       number,
       kind,
       state,
       updatedAt: issue.updated_at,
-      filePath: relativeToStorage(options.config.storageDirAbsolute, targetPath),
-      patchPath: kind === 'pull' && state === 'open' ? relativeToStorage(options.config.storageDirAbsolute, patchPath) : undefined,
+      filePath: relativeToStorage(storageDirAbsolute, targetPath),
+      patchPath: shouldWritePatch ? relativeToStorage(storageDirAbsolute, patchPath) : undefined,
     }
   }
 
@@ -182,7 +212,7 @@ export async function syncRepository(options: SyncOptions): Promise<SyncSummary>
   syncState.lastSyncedAt = syncedAt
   syncState.lastSince = since
 
-  await saveSyncState(options.config.storageDirAbsolute, syncState)
+  await saveSyncState(storageDirAbsolute, syncState)
 
   return {
     repo: options.repo,
@@ -212,6 +242,30 @@ function resolveSince(options: SyncOptions, syncState: SyncState): string | unde
 async function ensureStorageStructure(storageDirAbsolute: string): Promise<void> {
   await ensureDir(getIssuesDir(storageDirAbsolute))
   await ensureDir(getClosedIssuesDir(storageDirAbsolute))
+}
+
+async function pruneTrackedClosedItems(storageDirAbsolute: string, syncState: SyncState): Promise<number> {
+  await rm(getClosedIssuesDir(storageDirAbsolute), { recursive: true, force: true })
+  await ensureDir(getClosedIssuesDir(storageDirAbsolute))
+
+  let patchesDeleted = 0
+  for (const item of Object.values(syncState.items)) {
+    if (item.state !== 'closed')
+      continue
+    if (item.kind === 'pull')
+      patchesDeleted += await removePatchIfExists(storageDirAbsolute, item.number)
+    delete syncState.items[String(item.number)]
+  }
+
+  return patchesDeleted
+}
+
+async function removePatchIfExists(storageDirAbsolute: string, number: number): Promise<number> {
+  const patchPath = getPrPatchPath(storageDirAbsolute, number)
+  if (!await exists(patchPath))
+    return 0
+  await removeFile(patchPath)
+  return 1
 }
 
 function splitRepo(repo: string): { owner: string, repo: string } {

@@ -1,5 +1,6 @@
 // @env node
 import type { GhfsResolvedConfig } from '../types'
+import { resolve } from 'node:path'
 import { loadSyncState } from './state'
 
 export interface StatusSummary {
@@ -20,7 +21,7 @@ export interface StatusSummary {
 }
 
 export async function getStatusSummary(config: GhfsResolvedConfig): Promise<StatusSummary> {
-  const syncState = await loadSyncState(config.storageDirAbsolute)
+  const syncState = await loadSyncState(resolve(config.cwd, config.directory))
   const items = Object.values(syncState.items)
   const openCount = items.filter(item => item.state === 'open').length
   const closedCount = items.filter(item => item.state === 'closed').length

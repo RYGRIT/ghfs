@@ -7,7 +7,6 @@ import {
   CONFIG_FILE_CANDIDATES,
   DEFAULT_EXECUTE_FILE,
   DEFAULT_STORAGE_DIR,
-  DEFAULT_TOKEN_ENV,
 } from './constants'
 
 export interface ResolveConfigOptions {
@@ -57,33 +56,32 @@ export async function resolveConfig(options: ResolveConfigOptions = {}): Promise
   const { config: userConfig } = await loadUserConfig(cwd)
   const merged = mergeUserConfig(userConfig, overrides)
 
-  const storageDir = merged.storageDir ?? DEFAULT_STORAGE_DIR
-  const executeFile = merged.executeFile ?? (storageDir === DEFAULT_STORAGE_DIR ? DEFAULT_EXECUTE_FILE : join(storageDir, 'execute.yml'))
+  const directory = merged.directory ?? DEFAULT_STORAGE_DIR
+  const configuredToken = merged.auth?.token?.trim() || ''
+  const repo = merged.repo?.trim() || ''
+  const closedMode = merged.sync?.closed ?? 'existing'
+  const patchesMode = merged.sync?.patches ?? 'open'
 
   return {
     cwd,
-    repo: merged.repo,
-    storageDir,
-    storageDirAbsolute: resolve(cwd, storageDir),
-    executeFile,
-    executeFileAbsolute: resolve(cwd, executeFile),
+    repo,
+    directory,
     auth: {
-      preferGhCli: merged.auth?.preferGhCli ?? true,
-      tokenEnv: merged.auth?.tokenEnv ?? [...DEFAULT_TOKEN_ENV],
-    },
-    detectRepo: {
-      fromGit: merged.detectRepo?.fromGit ?? true,
-      fromPackageJson: merged.detectRepo?.fromPackageJson ?? true,
+      token: configuredToken,
     },
     sync: {
-      includeClosed: merged.sync?.includeClosed ?? true,
-      writePrPatch: merged.sync?.writePrPatch ?? true,
-      deleteClosedPrPatch: merged.sync?.deleteClosedPrPatch ?? true,
-    },
-    cli: {
-      interactiveExecuteInTTY: merged.cli?.interactiveExecuteInTTY ?? true,
+      closed: closedMode,
+      patches: patchesMode,
     },
   }
+}
+
+export function getStorageDirAbsolute(config: Pick<GhfsResolvedConfig, 'cwd' | 'directory'>): string {
+  return resolve(config.cwd, config.directory)
+}
+
+export function getExecuteFile(config: Pick<GhfsResolvedConfig, 'directory'>): string {
+  return config.directory === DEFAULT_STORAGE_DIR ? DEFAULT_EXECUTE_FILE : join(config.directory, 'execute.yml')
 }
 
 function findConfigFile(cwd: string): string | undefined {
@@ -103,17 +101,9 @@ function mergeUserConfig(base: GhfsUserConfig, overrides: Partial<GhfsUserConfig
       ...base.auth,
       ...overrides.auth,
     },
-    detectRepo: {
-      ...base.detectRepo,
-      ...overrides.detectRepo,
-    },
     sync: {
       ...base.sync,
       ...overrides.sync,
-    },
-    cli: {
-      ...base.cli,
-      ...overrides.cli,
     },
   }
 }

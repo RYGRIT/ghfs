@@ -1,8 +1,8 @@
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { resolveConfig } from './config'
+import { getExecuteFile, getStorageDirAbsolute, resolveConfig } from './config'
 
 const tempDirs: string[] = []
 
@@ -16,33 +16,49 @@ describe('resolveConfig', () => {
 
     const config = await resolveConfig({ cwd })
 
-    expect(config.storageDir).toBe('.ghfs')
-    expect(config.executeFile).toBe('.ghfs/execute.yml')
-    expect(config.executeFileAbsolute).toBe(resolve(cwd, '.ghfs/execute.yml'))
+    expect(config.directory).toBe('.ghfs')
+    expect(getStorageDirAbsolute(config)).toBe(join(cwd, '.ghfs'))
+    expect(getExecuteFile(config)).toBe('.ghfs/execute.yml')
+    expect(config.auth.token).toBe('')
+    expect(config.repo).toBe('')
+    expect(config.sync.closed).toBe('existing')
+    expect(config.sync.patches).toBe('open')
   })
 
-  it('derives execute file under custom storage dir', async () => {
+  it('derives execute file under custom directory', async () => {
     const cwd = await createTempDir()
 
     const config = await resolveConfig({
       cwd,
       overrides: {
-        storageDir: '.state',
+        directory: '.state',
       },
     })
 
-    expect(config.executeFile).toBe('.state/execute.yml')
-    expect(config.executeFileAbsolute).toBe(resolve(cwd, '.state/execute.yml'))
+    expect(config.directory).toBe('.state')
+    expect(getExecuteFile(config)).toBe('.state/execute.yml')
   })
 
-  it('loads executeFile from ghfs.config.ts', async () => {
+  it('loads directory/auth/sync from ghfs.config.ts', async () => {
     const cwd = await createTempDir()
-    await writeFile(join(cwd, 'ghfs.config.ts'), `export default { executeFile: '.ghfs/custom.yml' }\n`, 'utf8')
+    await writeFile(join(cwd, 'ghfs.config.ts'), `
+export default {
+  directory: '.ghfs-data',
+  auth: { token: '  test-token  ' },
+  sync: {
+    closed: false,
+    patches: 'all',
+  },
+}
+`.trimStart(), 'utf8')
 
     const config = await resolveConfig({ cwd })
 
-    expect(config.executeFile).toBe('.ghfs/custom.yml')
-    expect(config.executeFileAbsolute).toBe(resolve(cwd, '.ghfs/custom.yml'))
+    expect(config.directory).toBe('.ghfs-data')
+    expect(getExecuteFile(config)).toBe('.ghfs-data/execute.yml')
+    expect(config.auth.token).toBe('test-token')
+    expect(config.sync.closed).toBe(false)
+    expect(config.sync.patches).toBe('all')
   })
 })
 

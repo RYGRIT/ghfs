@@ -19,7 +19,7 @@ export interface ExecuteOptions {
 export async function executePendingChanges(options: ExecuteOptions): Promise<ExecutionResult> {
   const allOps = await readAndValidateExecuteFile(options.executeFilePath)
 
-  const interactive = process.stdin.isTTY && !options.nonInteractive && options.config.cli.interactiveExecuteInTTY
+  const interactive = process.stdin.isTTY && !options.nonInteractive
   const selected = interactive
     ? await selectOperations(allOps)
     : allOps.map((op, index) => ({ op, index }))
