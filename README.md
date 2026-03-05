@@ -41,8 +41,9 @@ Then you can view them offline, or ask your local agent to summarize them for yo
 
 - In interactive terminals (TTY), `ghfs` uses rich progress indicators.
 - In CI or piped output, `ghfs` prints deterministic plain-text progress lines.
+- `ghfs sync --full` bypasses metadata early-return and runs full pagination.
 
-`ghfs status` now also includes diagnostics from the latest sync run (mode, duration, counters, and stage timings) from `.ghfs/.sync.json`.
+`ghfs status` now also includes diagnostics from the latest sync run (duration, request count, counters, and stage timings) from `.ghfs/.sync.json`.
 
 ## Execute operations
 

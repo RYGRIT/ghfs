@@ -11,10 +11,10 @@ export interface StatusSummary {
   executionRuns: number
   lastSyncRun?: {
     runId: string
-    mode: 'full' | 'incremental' | 'targeted'
     startedAt: string
     finishedAt: string
     durationMs: number
+    requestCount: number
     since?: string
     numbersCount?: number
     counters: {
@@ -28,10 +28,10 @@ export interface StatusSummary {
       patchesDeleted: number
     }
     stages: {
-      resolve: number
+      metadata: number
+      pagination: number
       fetch: number
-      filter: number
-      sync: number
+      materialize: number
       prune: number
       save: number
     }
@@ -64,10 +64,10 @@ export async function getStatusSummary(config: GhfsResolvedConfig): Promise<Stat
     lastSyncRun: lastSyncRun
       ? {
           runId: lastSyncRun.runId,
-          mode: lastSyncRun.mode,
           startedAt: lastSyncRun.startedAt,
           finishedAt: lastSyncRun.finishedAt,
           durationMs: lastSyncRun.durationMs,
+          requestCount: lastSyncRun.requestCount,
           since: lastSyncRun.since,
           numbersCount: lastSyncRun.numbersCount,
           counters: {
@@ -81,10 +81,10 @@ export async function getStatusSummary(config: GhfsResolvedConfig): Promise<Stat
             patchesDeleted: lastSyncRun.counters.patchesDeleted,
           },
           stages: {
-            resolve: lastSyncRun.stages.resolve,
+            metadata: lastSyncRun.stages.metadata,
+            pagination: lastSyncRun.stages.pagination,
             fetch: lastSyncRun.stages.fetch,
-            filter: lastSyncRun.stages.filter,
-            sync: lastSyncRun.stages.sync,
+            materialize: lastSyncRun.stages.materialize,
             prune: lastSyncRun.stages.prune,
             save: lastSyncRun.stages.save,
           },

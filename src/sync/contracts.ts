@@ -1,8 +1,7 @@
 import type { GhfsResolvedConfig } from '../types'
 import type { RepositoryProvider } from '../types/provider'
 
-export type SyncMode = 'full' | 'incremental' | 'targeted'
-export type SyncStage = 'resolve' | 'fetch' | 'filter' | 'sync' | 'prune' | 'save'
+export type SyncStage = 'metadata' | 'pagination' | 'fetch' | 'materialize' | 'prune' | 'save'
 
 export interface SyncProgressSnapshot {
   scanned: number
@@ -19,7 +18,6 @@ export interface SyncReporter {
   onStart?: (event: {
     repo: string
     startedAt: string
-    mode?: SyncMode
     since?: string
     numbersCount?: number
     snapshot: SyncProgressSnapshot
@@ -64,9 +62,14 @@ export interface SyncOptions {
 
 export interface SyncSummary {
   repo: string
-  mode: SyncMode
   since?: string
   syncedAt: string
+  totalIssues: number
+  totalPulls: number
+  updatedIssues: number
+  updatedPulls: number
+  trackedItems: number
+  requestCount: number
   selected: number
   processed: number
   skipped: number

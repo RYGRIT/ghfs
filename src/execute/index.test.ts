@@ -167,6 +167,7 @@ function createMockProvider(overrides: Partial<RepositoryProvider> = {}): Reposi
     })),
     fetchRepositoryLabels: vi.fn(async () => []),
     fetchRepositoryMilestones: vi.fn(async () => []),
+    getRequestCount: vi.fn(() => 0),
     actionClose: vi.fn(async () => {}),
     actionReopen: vi.fn(async () => {}),
     actionSetTitle: vi.fn(async () => {}),

@@ -8,18 +8,12 @@ export function printSyncSummaryTable(
   title: string,
 ): void {
   printer.table(title, [
-    ['repo', summary.repo],
-    ['synced at', summary.syncedAt ? new Date(summary.syncedAt) : '-'],
-    ['since', summary.since ? new Date(summary.since) : '-'],
-    ['mode', summary.mode],
+    ['total issues count', summary.totalIssues],
+    ['total prs count', summary.totalPulls],
+    ['issues updated', summary.updatedIssues],
+    ['prs updated', summary.updatedPulls],
+    ['local tracked issues', summary.trackedItems],
+    ['github requests', summary.requestCount],
     ['duration', formatDuration(summary.durationMs)],
-    ['scanned', summary.scanned],
-    ['selected', summary.selected],
-    ['processed', summary.processed],
-    ['skipped', summary.skipped],
-    ['markdown written', summary.written],
-    ['moved', summary.moved],
-    ['patch written', summary.patchesWritten],
-    ['patch deleted', summary.patchesDeleted],
-  ], { excludeZero: true })
+  ])
 }

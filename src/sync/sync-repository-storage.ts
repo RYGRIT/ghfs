@@ -57,6 +57,8 @@ export async function handleClosedIssueByPolicy(input: ClosedIssuePolicyInput): 
 
     delete context.syncState.items[String(number)]
     return {
+      kind,
+      action: 'remove',
       skipped: 0,
       written: 0,
       moved: 0,
@@ -72,6 +74,8 @@ export async function handleClosedIssueByPolicy(input: ClosedIssuePolicyInput): 
 
     delete context.syncState.items[String(number)]
     return {
+      kind,
+      action: 'remove',
       skipped: 0,
       written: 0,
       moved: 0,
@@ -126,7 +130,7 @@ export async function removeStaleMarkdownFiles(paths: IssuePaths): Promise<void>
   }
 }
 
-function resolveMoveSourcePath(paths: IssuePaths, state: 'open' | 'closed'): string | undefined {
+export function resolveMoveSourcePath(paths: IssuePaths, state: 'open' | 'closed'): string | undefined {
   if (paths.hasTrackedFile && paths.trackedPath && paths.trackedPath !== paths.targetPath)
     return paths.trackedPath
 
@@ -146,7 +150,7 @@ function resolveMoveSourcePath(paths: IssuePaths, state: 'open' | 'closed'): str
   return undefined
 }
 
-function getExistingMarkdownPaths(paths: IssuePaths): string[] {
+export function getExistingMarkdownPaths(paths: IssuePaths): string[] {
   const markdownPaths = new Set<string>()
   if (paths.hasOpenFile)
     markdownPaths.add(paths.openPath)
@@ -177,6 +181,7 @@ export function updateTrackedItem(
   issueUpdatedAt: string,
   markdownPath: string,
   patchPath: string | undefined,
+  data: SyncItemState['data'],
 ): void {
   context.syncState.items[String(number)] = {
     number,
@@ -186,6 +191,7 @@ export function updateTrackedItem(
     lastSyncedAt: context.syncedAt,
     filePath: relativeToStorage(context.storageDirAbsolute, markdownPath),
     patchPath: patchPath ? relativeToStorage(context.storageDirAbsolute, patchPath) : undefined,
+    data,
   }
 }
 

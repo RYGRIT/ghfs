@@ -11,7 +11,7 @@ describe('getStatusSummary', () => {
     const storageDir = join(cwd, '.ghfs')
     await mkdir(storageDir, { recursive: true })
     await writeFile(join(storageDir, '.sync.json'), JSON.stringify({
-      version: 1,
+      version: 2,
       repo: 'owner/repo',
       lastSyncedAt: '2026-01-10T00:00:00.000Z',
       items: {
@@ -22,16 +22,33 @@ describe('getStatusSummary', () => {
           lastUpdatedAt: '2026-01-10T00:00:00.000Z',
           lastSyncedAt: '2026-01-10T00:00:00.000Z',
           filePath: 'issues/00001-issue-1.md',
+          data: {
+            item: {
+              number: 1,
+              kind: 'issue',
+              state: 'open',
+              updatedAt: '2026-01-10T00:00:00.000Z',
+              createdAt: '2026-01-01T00:00:00.000Z',
+              closedAt: null,
+              title: 'Issue 1',
+              body: 'Body',
+              author: 'user',
+              labels: [],
+              assignees: [],
+              milestone: null,
+            },
+            comments: [],
+          },
         },
       },
       executions: [],
       lastSyncRun: {
         runId: 'sync_123',
         repo: 'owner/repo',
-        mode: 'incremental',
         startedAt: '2026-01-10T00:00:00.000Z',
         finishedAt: '2026-01-10T00:00:01.000Z',
         durationMs: 1000,
+        requestCount: 10,
         since: '2026-01-09T00:00:00.000Z',
         counters: {
           scanned: 1,
@@ -44,10 +61,10 @@ describe('getStatusSummary', () => {
           patchesDeleted: 0,
         },
         stages: {
-          resolve: 5,
+          metadata: 5,
+          pagination: 10,
           fetch: 10,
-          filter: 1,
-          sync: 50,
+          materialize: 50,
           prune: 2,
           save: 5,
         },
@@ -58,9 +75,9 @@ describe('getStatusSummary', () => {
     expect(summary.repo).toBe('owner/repo')
     expect(summary.totalTracked).toBe(1)
     expect(summary.lastSyncRun?.runId).toBe('sync_123')
-    expect(summary.lastSyncRun?.mode).toBe('incremental')
+    expect(summary.lastSyncRun?.requestCount).toBe(10)
     expect(summary.lastSyncRun?.counters.processed).toBe(1)
-    expect(summary.lastSyncRun?.stages.sync).toBe(50)
+    expect(summary.lastSyncRun?.stages.materialize).toBe(50)
 
     await rm(cwd, { recursive: true, force: true })
   })

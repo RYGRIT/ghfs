@@ -1,8 +1,8 @@
 import type { ExecutionResult } from './execution'
 import type { IssueKind, IssueState } from './issue'
+import type { ProviderComment, ProviderItem, ProviderPullMetadata } from './provider'
 
-export type SyncRunMode = 'full' | 'incremental' | 'targeted'
-export type SyncRunStage = 'resolve' | 'fetch' | 'filter' | 'sync' | 'prune' | 'save'
+export type SyncRunStage = 'metadata' | 'pagination' | 'fetch' | 'materialize' | 'prune' | 'save'
 
 export interface SyncRunCounters {
   scanned: number
@@ -18,14 +18,20 @@ export interface SyncRunCounters {
 export interface SyncRunTelemetry {
   runId: string
   repo: string
-  mode: SyncRunMode
   startedAt: string
   finishedAt: string
   durationMs: number
+  requestCount: number
   since?: string
   numbersCount?: number
   counters: SyncRunCounters
   stages: Record<SyncRunStage, number>
+}
+
+export interface SyncItemCanonicalData {
+  item: ProviderItem
+  comments: ProviderComment[]
+  pull?: ProviderPullMetadata
 }
 
 export interface SyncItemState {
@@ -36,13 +42,15 @@ export interface SyncItemState {
   lastSyncedAt: string
   filePath: string
   patchPath?: string
+  data: SyncItemCanonicalData
 }
 
 export interface SyncState {
-  version: 1
+  version: 2
   repo?: string
   lastSyncedAt?: string
   lastSince?: string
+  lastRepoUpdatedAt?: string
   lastSyncRun?: SyncRunTelemetry
   items: Record<string, SyncItemState>
   executions: ExecutionResult[]

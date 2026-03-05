@@ -60,7 +60,6 @@ describe('createCliPrinter', () => {
     reporter.onStart?.({
       repo: 'owner/repo',
       startedAt: '2026-01-01T00:00:00.000Z',
-      mode: 'full',
       snapshot: {
         scanned: 0,
         selected: 0,
@@ -73,8 +72,8 @@ describe('createCliPrinter', () => {
       },
     })
     reporter.onStageStart?.({
-      stage: 'sync',
-      message: 'Sync items',
+      stage: 'fetch',
+      message: 'Fetch updated issues/PRs',
       snapshot: {
         scanned: 0,
         selected: 5,
@@ -87,7 +86,7 @@ describe('createCliPrinter', () => {
       },
     })
     reporter.onStageUpdate?.({
-      stage: 'sync',
+      stage: 'fetch',
       snapshot: {
         scanned: 0,
         selected: 5,
@@ -100,7 +99,7 @@ describe('createCliPrinter', () => {
       },
     })
     reporter.onStageUpdate?.({
-      stage: 'sync',
+      stage: 'fetch',
       snapshot: {
         scanned: 0,
         selected: 5,
@@ -113,7 +112,7 @@ describe('createCliPrinter', () => {
       },
     })
     reporter.onStageUpdate?.({
-      stage: 'sync',
+      stage: 'fetch',
       snapshot: {
         scanned: 0,
         selected: 5,
@@ -127,7 +126,7 @@ describe('createCliPrinter', () => {
     })
 
     const printed = logSpy.mock.calls.map(call => String(call[0]))
-    const progressLines = printed.filter(line => line.toLowerCase().includes('processed'))
+    const progressLines = printed.filter(line => line.toLowerCase().includes('fetched'))
     expect(progressLines).toHaveLength(2)
 
     logSpy.mockRestore()
@@ -141,8 +140,8 @@ describe('createCliPrinter', () => {
     const reporter = printer.createSyncReporter()
 
     reporter.onStageStart?.({
-      stage: 'fetch',
-      message: 'Fetch issue and pull request candidates',
+      stage: 'pagination',
+      message: 'Pagination',
       snapshot: {
         scanned: 3,
         selected: 0,
@@ -155,8 +154,8 @@ describe('createCliPrinter', () => {
       },
     })
     reporter.onStageEnd?.({
-      stage: 'fetch',
-      message: 'Fetch issue and pull request candidates',
+      stage: 'pagination',
+      message: 'Pagination',
       durationMs: 10,
       snapshot: {
         scanned: 3,
@@ -170,8 +169,8 @@ describe('createCliPrinter', () => {
       },
     })
     reporter.onStageStart?.({
-      stage: 'sync',
-      message: 'Sync items',
+      stage: 'fetch',
+      message: 'Fetch updated issues/PRs',
       snapshot: {
         scanned: 3,
         selected: 3,
@@ -184,7 +183,7 @@ describe('createCliPrinter', () => {
       },
     })
     reporter.onStageUpdate?.({
-      stage: 'sync',
+      stage: 'fetch',
       message: '#3 issue open',
       snapshot: {
         scanned: 3,
@@ -198,8 +197,8 @@ describe('createCliPrinter', () => {
       },
     })
     reporter.onStageEnd?.({
-      stage: 'sync',
-      message: 'Sync items',
+      stage: 'fetch',
+      message: 'Fetch updated issues/PRs',
       durationMs: 20,
       snapshot: {
         scanned: 3,
@@ -241,36 +240,36 @@ describe('createCliPrinter', () => {
     }
 
     reporter.onStageStart?.({
-      stage: 'resolve',
-      message: 'Resolve sync context',
+      stage: 'metadata',
+      message: 'Fetch repository metadata',
       snapshot,
     })
     reporter.onStageEnd?.({
-      stage: 'resolve',
-      message: 'Resolve sync context',
+      stage: 'metadata',
+      message: 'Fetch repository metadata',
       durationMs: 5,
       snapshot,
     })
     reporter.onStageStart?.({
-      stage: 'filter',
-      message: 'Filter candidate items',
+      stage: 'materialize',
+      message: 'Materialize local files',
       snapshot,
     })
     reporter.onStageEnd?.({
-      stage: 'filter',
-      message: 'Filter candidate items',
+      stage: 'materialize',
+      message: 'Materialize local files',
       durationMs: 5,
       snapshot,
     })
     reporter.onStageStart?.({
-      stage: 'fetch',
-      message: 'Fetch issue and pull request candidates',
+      stage: 'pagination',
+      message: 'Pagination',
       snapshot: { ...snapshot, scanned: 2 },
     })
 
     const printed = logSpy.mock.calls.map(call => String(call[0]))
     expect(printed).toEqual([
-      'Fetch issue and pull request candidates',
+      'Pagination',
     ])
 
     logSpy.mockRestore()
@@ -287,8 +286,13 @@ describe('createCliPrinter', () => {
     syncReporter.onComplete?.({
       summary: {
         repo: 'owner/repo',
-        mode: 'full',
         syncedAt: '2026-01-01T00:00:00.000Z',
+        totalIssues: 3,
+        totalPulls: 2,
+        updatedIssues: 1,
+        updatedPulls: 1,
+        trackedItems: 5,
+        requestCount: 7,
         selected: 1,
         processed: 1,
         skipped: 0,
@@ -300,10 +304,10 @@ describe('createCliPrinter', () => {
         durationMs: 100,
       },
       stages: {
-        resolve: 1,
+        metadata: 1,
+        pagination: 1,
         fetch: 1,
-        filter: 1,
-        sync: 1,
+        materialize: 1,
         prune: 1,
         save: 1,
       },
@@ -322,7 +326,7 @@ describe('createCliPrinter', () => {
     })
 
     const printed = logSpy.mock.calls.map(call => String(call[0]))
-    expect(printed.some(line => line.includes('1 selected item'))).toBe(true)
+    expect(printed.some(line => line.includes('1 issues and 1 PRs updated'))).toBe(true)
     expect(printed.some(line => line.includes('(100ms)'))).toBe(true)
     expect(printed.some(line => line.includes('1 planned operation'))).toBe(true)
     expect(printed.some(line => line.includes('2 planned operations'))).toBe(true)

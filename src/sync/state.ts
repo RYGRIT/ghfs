@@ -11,25 +11,21 @@ export async function loadSyncState(storageDirAbsolute: string): Promise<SyncSta
   const path = getSyncStatePath(storageDirAbsolute)
   try {
     const raw = await readFile(path, 'utf8')
-    const parsed = JSON.parse(raw) as {
-      version?: number
-      items?: Record<string, SyncItemState & { updatedAt?: string }>
-      executions?: SyncState['executions']
-      repo?: string
-      lastSyncedAt?: string
-      lastSince?: string
-      lastSyncRun?: SyncState['lastSyncRun']
-    }
-    if (parsed.version !== 1)
+    const parsed = JSON.parse(raw) as Partial<SyncState>
+    if (parsed.version !== 2)
       return createEmptySyncState()
+
+    const items = normalizeItems(parsed.items)
+
     return {
-      version: 1,
-      items: normalizeItems(parsed.items, parsed.lastSyncedAt),
+      version: 2,
+      items,
       executions: parsed.executions ?? [],
       repo: parsed.repo,
       lastSyncedAt: parsed.lastSyncedAt,
       lastSince: parsed.lastSince,
-      lastSyncRun: normalizeLastSyncRun(parsed.lastSyncRun),
+      lastRepoUpdatedAt: parsed.lastRepoUpdatedAt,
+      lastSyncRun: parsed.lastSyncRun,
     }
   }
   catch {
@@ -37,24 +33,25 @@ export async function loadSyncState(storageDirAbsolute: string): Promise<SyncSta
   }
 }
 
-function normalizeItems(items: Record<string, SyncItemState & { updatedAt?: string }> | undefined, fallbackLastSyncedAt: string | undefined): SyncState['items'] {
+function normalizeItems(items: unknown): SyncState['items'] {
   if (!items)
     return {}
 
-  const normalized: SyncState['items'] = {}
-  for (const [key, item] of Object.entries(items)) {
-    const lastUpdatedAt = item.lastUpdatedAt ?? item.updatedAt
-    if (!lastUpdatedAt)
-      continue
+  if (typeof items !== 'object' || Array.isArray(items))
+    return {}
 
-    normalized[key] = {
-      ...item,
-      lastUpdatedAt,
-      lastSyncedAt: item.lastSyncedAt ?? fallbackLastSyncedAt ?? lastUpdatedAt,
-    }
+  const normalizedItems: SyncState['items'] = {}
+  for (const [key, item] of Object.entries(items as Record<string, SyncItemState>)) {
+    if (!item || typeof item !== 'object')
+      continue
+    if (!item.lastUpdatedAt || !item.lastSyncedAt || !item.filePath)
+      continue
+    if (!item.data || !item.data.item)
+      continue
+    normalizedItems[key] = item
   }
 
-  return normalized
+  return normalizedItems
 }
 
 export async function saveSyncState(storageDirAbsolute: string, state: SyncState): Promise<void> {
@@ -65,7 +62,7 @@ export async function saveSyncState(storageDirAbsolute: string, state: SyncState
 
 export function createEmptySyncState(): SyncState {
   return {
-    version: 1,
+    version: 2,
     items: {},
     executions: [],
   }
@@ -77,12 +74,4 @@ export function appendExecution(state: SyncState, result: ExecutionResult, limit
     ...state,
     executions: nextExecutions,
   }
-}
-
-function normalizeLastSyncRun(lastSyncRun: SyncState['lastSyncRun'] | undefined): SyncState['lastSyncRun'] {
-  if (!lastSyncRun)
-    return undefined
-  if (!lastSyncRun.runId || !lastSyncRun.repo || !lastSyncRun.mode)
-    return undefined
-  return lastSyncRun
 }

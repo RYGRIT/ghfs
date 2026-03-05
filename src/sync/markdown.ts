@@ -42,7 +42,6 @@ const FIELDS_ALWAYS_EXCLUDE = new Set(['repo', 'kind'])
 export function renderIssueMarkdown(input: MarkdownDocumentInput): string {
   const url = input.url || `https://github.com/${input.repo}/${input.kind === 'pull' ? 'pull' : 'issues'}/${input.number}`
   const frontmatter = {
-    schema: 'ghfs/issue-doc@v1',
     repo: input.repo,
     number: input.number,
     kind: input.kind,

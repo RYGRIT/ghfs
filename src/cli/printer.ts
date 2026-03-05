@@ -165,15 +165,12 @@ function createRichSyncReporter(printer: CliPrinter): SyncReporter {
   let lastProcessed = 0
 
   return {
-    onStart(event) {
-      const mode = event.mode ? ` in ${event.mode} mode` : ''
-      printer.start(`Starting sync for ${event.repo}${mode}.`)
-    },
+    onStart() {},
     onStageStart(event) {
       if (isHiddenSyncStage(event.stage))
         return
 
-      if (event.stage === 'sync') {
+      if (event.stage === 'fetch') {
         hasSyncProgress = true
         syncProgress = p.progress({ max: Math.max(event.snapshot.selected, 1) })
         lastProcessed = 0
@@ -185,7 +182,7 @@ function createRichSyncReporter(printer: CliPrinter): SyncReporter {
       stageSpinner.start(event.message)
     },
     onStageUpdate(event) {
-      if (event.stage === 'sync' && hasSyncProgress) {
+      if (event.stage === 'fetch' && hasSyncProgress) {
         const nextProcessed = event.snapshot.processed
         const advanceBy = Math.max(0, nextProcessed - lastProcessed)
         const message = formatSyncProgressLine(event.snapshot, event.message)
@@ -213,7 +210,7 @@ function createRichSyncReporter(printer: CliPrinter): SyncReporter {
         event.durationMs,
       )
 
-      if (event.stage === 'sync' && hasSyncProgress) {
+      if (event.stage === 'fetch' && hasSyncProgress) {
         const advanceBy = Math.max(0, event.snapshot.processed - lastProcessed)
         if (advanceBy > 0)
           syncProgress.advance(advanceBy)
@@ -231,7 +228,7 @@ function createRichSyncReporter(printer: CliPrinter): SyncReporter {
         stageSpinner.clear()
     },
     onComplete(event) {
-      printer.success(`Sync finished. Processed ${event.summary.processed} of ${countNoun(event.summary.selected, 'selected item')}${c.dim(` (${formatDuration(event.summary.durationMs)}`)}.`)
+      printer.success(`Sync finished. ${event.summary.updatedIssues} issues and ${event.summary.updatedPulls} PRs updated${c.dim(` (${formatDuration(event.summary.durationMs)})`)}.`)
     },
     onError(event) {
       const stage = event.stage && !isHiddenSyncStage(event.stage) ? ` while ${describeStage(event.stage)}` : ''
@@ -250,17 +247,14 @@ function createPlainSyncReporter(printer: CliPrinter, progressEvery: number): Sy
   let lastProgress = 0
 
   return {
-    onStart(event) {
-      const mode = event.mode ? ` in ${event.mode} mode` : ''
-      printer.step(`Starting sync for ${event.repo}${mode}.`)
-    },
+    onStart() {},
     onStageStart(event) {
       if (isHiddenSyncStage(event.stage))
         return
       printer.step(event.message)
     },
     onStageUpdate(event) {
-      if (event.stage === 'sync') {
+      if (event.stage === 'fetch') {
         const processed = event.snapshot.processed
         const shouldLog = processed === 0
           || processed === event.snapshot.selected
@@ -288,7 +282,7 @@ function createPlainSyncReporter(printer: CliPrinter, progressEvery: number): Sy
       printer.step(completionLine)
     },
     onComplete(event) {
-      printer.success(`Sync finished. Processed ${event.summary.processed} of ${countNoun(event.summary.selected, 'selected item')}${c.dim(` (${formatDuration(event.summary.durationMs)})`)}.`)
+      printer.success(`Sync finished. ${event.summary.updatedIssues} issues and ${event.summary.updatedPulls} PRs updated${c.dim(` (${formatDuration(event.summary.durationMs)})`)}.`)
     },
     onError(event) {
       const stage = event.stage && !isHiddenSyncStage(event.stage) ? ` while ${describeStage(event.stage)}` : ''
@@ -384,7 +378,7 @@ function formatSyncProgressLine(
   },
   message?: string,
 ): string {
-  const line = `Processed ${snapshot.processed} of ${countNoun(snapshot.selected, 'item')} (${snapshot.skipped} skipped, ${snapshot.written} written, ${snapshot.moved} moved, ${countNoun(snapshot.patchesWritten, 'patch')} added, ${countNoun(snapshot.patchesDeleted, 'patch')} removed)`
+  const line = `Fetched ${snapshot.processed} of ${countNoun(snapshot.selected, 'item')} (${snapshot.skipped} skipped, ${snapshot.written} written, ${snapshot.moved} moved, ${countNoun(snapshot.patchesWritten, 'patch')} added, ${countNoun(snapshot.patchesDeleted, 'patch')} removed)`
   if (!message)
     return line
   return `${line}. Current: ${message}`
@@ -400,20 +394,11 @@ function formatStageCompletionLine(
 
   const duration = c.dim(` (${formatDuration(durationMs)})`)
 
-  if (stage === 'resolve')
-    return `Resolved sync context${duration}.`
+  if (stage === 'pagination')
+    return `Pagination scanned ${countNoun(snapshot.scanned, 'candidate item')}${duration}.`
 
   if (stage === 'fetch')
-    return `Fetched ${countNoun(snapshot.scanned, 'candidate item')}${duration}.`
-
-  if (stage === 'filter')
-    return `Selected ${snapshot.selected} of ${countNoun(snapshot.scanned, 'candidate item')}${duration}.`
-
-  if (stage === 'sync')
-    return `Synced ${snapshot.processed} of ${countNoun(snapshot.selected, 'selected item')} (${snapshot.skipped} skipped, ${snapshot.written} written, ${snapshot.moved} moved, ${countNoun(snapshot.patchesWritten, 'patch')} added, ${countNoun(snapshot.patchesDeleted, 'patch')} removed)${duration}.`
-
-  if (stage === 'prune')
-    return `Pruned local artifacts (${countNoun(snapshot.patchesDeleted, 'patch file')} removed)${duration}.`
+    return `Fetched updated issues/PRs (${snapshot.processed}/${snapshot.selected})${duration}.`
 
   return undefined
 }
@@ -465,30 +450,26 @@ export function formatKeyValueLines(
 function hasStageEffect(stage: SyncStage, snapshot: SyncStageSnapshot): boolean {
   if (isHiddenSyncStage(stage))
     return false
-  if (stage === 'fetch')
+  if (stage === 'pagination')
     return snapshot.scanned > 0
-  if (stage === 'filter')
-    return snapshot.selected > 0
-  if (stage === 'sync')
+  if (stage === 'fetch')
     return snapshot.processed > 0
-  if (stage === 'prune')
-    return snapshot.patchesDeleted > 0
   return true
 }
 
 function isHiddenSyncStage(stage: SyncStage): boolean {
-  return stage === 'resolve' || stage === 'filter'
+  return stage !== 'pagination' && stage !== 'fetch'
 }
 
 function describeStage(stage: SyncStage): string {
-  if (stage === 'resolve')
-    return 'resolving the sync context'
+  if (stage === 'pagination')
+    return 'running pagination'
   if (stage === 'fetch')
-    return 'fetching candidates'
-  if (stage === 'filter')
-    return 'filtering candidates'
-  if (stage === 'sync')
-    return 'syncing items'
+    return 'fetching updated issues and pull requests'
+  if (stage === 'metadata')
+    return 'fetching repository metadata'
+  if (stage === 'materialize')
+    return 'materializing local files'
   if (stage === 'prune')
     return 'pruning local artifacts'
   return 'saving sync state'

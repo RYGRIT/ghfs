@@ -1,5 +1,4 @@
 export type {
-  SyncMode,
   SyncOptions,
   SyncProgressSnapshot,
   SyncReporter,

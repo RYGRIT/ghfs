@@ -18,45 +18,39 @@ describe('syncRepository', () => {
     await mkdir(join(storageDir, 'issues'), { recursive: true })
     await writeFile(join(storageDir, 'issues', '00001-issue-1.md'), '# existing\n', 'utf8')
     await writeFile(getSyncStatePath(storageDir), JSON.stringify({
-      version: 1,
+      version: 2,
+      repo: 'owner/repo',
       lastSyncedAt: '2026-01-01T00:00:00.000Z',
+      lastRepoUpdatedAt: '2026-01-02T00:00:00.000Z',
       items: {
-        1: {
+        1: createTrackedItem({
           number: 1,
           kind: 'issue',
           state: 'open',
-          lastUpdatedAt: '2026-01-10T00:00:00.000Z',
-          lastSyncedAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-10T00:00:00.000Z',
           filePath: 'issues/00001-issue-1.md',
-        },
+        }),
       },
       executions: [],
     }, null, 2), 'utf8')
 
-    const fetchItems = vi.fn(async ({ state }: { state: string, since?: string }): Promise<ProviderItem[]> => {
+    const paginateItems = vi.fn(async function* ({ state }: { state: string }) {
       if (state === 'open') {
-        return [
-          {
-            number: 1,
-            kind: 'issue' as const,
-            state: 'open' as const,
-            updatedAt: '2026-01-10T00:00:00.000Z',
-            createdAt: '2026-01-01T00:00:00.000Z',
-            closedAt: null,
-            title: 'Issue 1',
-            body: 'Body',
-            author: 'user1',
-            labels: [],
-            assignees: [],
-            milestone: null,
-          },
-        ]
+        yield [createIssue({
+          number: 1,
+          kind: 'issue',
+          state: 'open',
+          updatedAt: '2026-01-10T00:00:00.000Z',
+          title: 'Issue 1',
+        })]
       }
-      return []
+      else {
+        yield []
+      }
     })
     const fetchComments = vi.fn(async () => [])
     const provider = createMockProvider({
-      fetchItems,
+      paginateItems,
       fetchComments,
     })
 
@@ -72,17 +66,15 @@ describe('syncRepository', () => {
     expect(summary.selected).toBe(1)
     expect(summary.processed).toBe(1)
     expect(summary.skipped).toBe(1)
-    expect(summary.mode).toBe('full')
+    expect(summary.updatedIssues).toBe(0)
+    expect(summary.updatedPulls).toBe(0)
     expect(summary.durationMs).toBeGreaterThanOrEqual(0)
     expect(summary.written).toBe(0)
-    expect(fetchItems).toHaveBeenCalledTimes(1)
-    expect(fetchItems).toHaveBeenCalledWith({ state: 'open', since: undefined })
     expect(fetchComments).not.toHaveBeenCalled()
 
     const syncState = await loadSyncState(storageDir)
     expect(syncState.items['1']?.lastUpdatedAt).toBe('2026-01-10T00:00:00.000Z')
     expect(syncState.items['1']?.lastSyncedAt).toBe(summary.syncedAt)
-    expect(syncState.lastSyncRun?.mode).toBe('full')
     expect(syncState.lastSyncRun?.counters.skipped).toBe(1)
     expect(syncState.lastSyncRun?.counters.processed).toBe(1)
 
@@ -95,38 +87,25 @@ describe('syncRepository', () => {
 
   it('syncs only pull requests when sync.issues is disabled', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'ghfs-sync-index-test-'))
-    const fetchItems = vi.fn(async (): Promise<ProviderItem[]> => {
-      return [
-        {
+    const paginateItems = vi.fn(async function* () {
+      yield [
+        createIssue({
           number: 1,
-          kind: 'issue' as const,
-          state: 'open' as const,
+          kind: 'issue',
+          state: 'open',
           updatedAt: '2026-01-10T00:00:00.000Z',
-          createdAt: '2026-01-01T00:00:00.000Z',
-          closedAt: null,
           title: 'Issue 1',
-          body: 'Issue body',
-          author: 'issue-user',
-          labels: [],
-          assignees: [],
-          milestone: null,
-        },
-        {
+        }),
+        createIssue({
           number: 2,
-          kind: 'pull' as const,
-          state: 'open' as const,
+          kind: 'pull',
+          state: 'open',
           updatedAt: '2026-01-10T00:00:00.000Z',
-          createdAt: '2026-01-01T00:00:00.000Z',
-          closedAt: null,
           title: 'PR 2',
-          body: 'PR body',
-          author: 'pr-user',
-          labels: [],
-          assignees: [],
-          milestone: null,
-        },
+        }),
       ]
     })
+
     const fetchComments = vi.fn(async () => [])
     const fetchPullMetadata = vi.fn(async () => {
       return {
@@ -140,7 +119,7 @@ describe('syncRepository', () => {
     })
 
     const provider = createMockProvider({
-      fetchItems,
+      paginateItems,
       fetchComments,
       fetchPullMetadata,
     })
@@ -157,11 +136,13 @@ describe('syncRepository', () => {
       full: true,
     })
 
-    expect(summary.scanned).toBe(2)
+    expect(summary.scanned).toBe(1)
     expect(summary.selected).toBe(1)
     expect(summary.processed).toBe(1)
     expect(summary.skipped).toBe(0)
     expect(summary.written).toBe(1)
+    expect(summary.updatedIssues).toBe(0)
+    expect(summary.updatedPulls).toBe(1)
     expect(fetchPullMetadata).toHaveBeenCalledTimes(1)
     expect(fetchPullMetadata).toHaveBeenCalledWith(2)
     expect(fetchComments).toHaveBeenCalledTimes(1)
@@ -178,27 +159,18 @@ describe('syncRepository', () => {
 
   it('emits reporter lifecycle callbacks for sync progress', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'ghfs-sync-index-test-'))
-    const fetchItems = vi.fn(async (): Promise<ProviderItem[]> => {
-      return [
-        {
-          number: 4,
-          kind: 'issue' as const,
-          state: 'open' as const,
-          updatedAt: '2026-01-12T00:00:00.000Z',
-          createdAt: '2026-01-01T00:00:00.000Z',
-          closedAt: null,
-          title: 'Issue 4',
-          body: 'Body',
-          author: 'user4',
-          labels: [],
-          assignees: [],
-          milestone: null,
-        },
-      ]
+    const paginateItems = vi.fn(async function* () {
+      yield [createIssue({
+        number: 4,
+        kind: 'issue',
+        state: 'open',
+        updatedAt: '2026-01-12T00:00:00.000Z',
+        title: 'Issue 4',
+      })]
     })
     const fetchComments = vi.fn(async () => [])
     const provider = createMockProvider({
-      fetchItems,
+      paginateItems,
       fetchComments,
     })
 
@@ -213,7 +185,7 @@ describe('syncRepository', () => {
         onStart: () => events.push('start'),
         onStageStart: event => events.push(`stage:start:${event.stage}`),
         onStageUpdate: (event) => {
-          if (event.stage === 'sync')
+          if (event.stage === 'fetch')
             events.push(`stage:update:${event.stage}`)
         },
         onStageEnd: event => events.push(`stage:end:${event.stage}`),
@@ -221,13 +193,13 @@ describe('syncRepository', () => {
       },
     })
 
-    expect(summary.mode).toBe('full')
     expect(summary.processed).toBe(1)
     expect(events).toContain('start')
-    expect(events).toContain('stage:start:resolve')
-    expect(events).toContain('stage:start:sync')
+    expect(events).toContain('stage:start:metadata')
+    expect(events).toContain('stage:start:pagination')
+    expect(events).toContain('stage:start:fetch')
     expect(events).toContain('stage:end:save')
-    expect(events).toContain('stage:update:sync')
+    expect(events).toContain('stage:update:fetch')
     expect(events).toContain('complete')
 
     await rm(cwd, { recursive: true, force: true })
@@ -261,6 +233,7 @@ function createMockProvider(overrides: Partial<RepositoryProvider> = {}): Reposi
     fetchRepository: vi.fn(async () => createRepositoryMetadata()),
     fetchRepositoryLabels: vi.fn(async () => []),
     fetchRepositoryMilestones: vi.fn(async () => []),
+    getRequestCount: vi.fn(() => 0),
     actionClose: vi.fn(async () => {}),
     actionReopen: vi.fn(async () => {}),
     actionSetTitle: vi.fn(async () => {}),
@@ -320,6 +293,68 @@ function createRepositoryMetadata() {
     pushed_at: '2026-01-03T00:00:00.000Z',
     owner: {
       login: 'owner',
+    },
+  }
+}
+
+function createIssue(input: {
+  number: number
+  kind: 'issue' | 'pull'
+  state: 'open' | 'closed'
+  updatedAt: string
+  title: string
+}): ProviderItem {
+  return {
+    number: input.number,
+    kind: input.kind,
+    state: input.state,
+    updatedAt: input.updatedAt,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    closedAt: input.state === 'closed' ? input.updatedAt : null,
+    title: input.title,
+    body: `${input.title} body`,
+    author: 'user',
+    labels: [],
+    assignees: [],
+    milestone: null,
+  }
+}
+
+function createTrackedItem(input: {
+  number: number
+  kind: 'issue' | 'pull'
+  state: 'open' | 'closed'
+  updatedAt: string
+  filePath: string
+}) {
+  return {
+    number: input.number,
+    kind: input.kind,
+    state: input.state,
+    lastUpdatedAt: input.updatedAt,
+    lastSyncedAt: '2026-01-01T00:00:00.000Z',
+    filePath: input.filePath,
+    data: {
+      item: createIssue({
+        number: input.number,
+        kind: input.kind,
+        state: input.state,
+        updatedAt: input.updatedAt,
+        title: `Issue ${input.number}`,
+      }),
+      comments: [],
+      ...(input.kind === 'pull'
+        ? {
+            pull: {
+              isDraft: false,
+              merged: false,
+              mergedAt: null,
+              baseRef: 'main',
+              headRef: 'feature',
+              requestedReviewers: [],
+            },
+          }
+        : {}),
     },
   }
 }

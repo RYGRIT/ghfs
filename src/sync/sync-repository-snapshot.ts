@@ -1,11 +1,10 @@
 import type { SyncItemState } from '../types'
 import type { ProviderRepository } from '../types/provider'
 import type { SyncContext } from './sync-repository-types'
-import { mkdir, readFile, writeFile } from 'node:fs/promises'
-import { basename, join } from 'pathe'
-import { parse as parseYaml } from 'yaml'
+import { mkdir, writeFile } from 'node:fs/promises'
+import { join } from 'pathe'
 import { ISSUES_INDEX_FILE_NAME, PULLS_INDEX_FILE_NAME, REPO_SNAPSHOT_FILE_NAME } from '../constants'
-import { getTimestamp, isRecord, renderRowsTable } from '../utils/markdown'
+import { getTimestamp, renderRowsTable } from '../utils/markdown'
 
 interface IndexRow {
   number: number
@@ -17,7 +16,6 @@ interface IndexRow {
 }
 
 interface RepoSnapshot {
-  schema: 'ghfs/repo-doc@v1'
   repo: string
   synced_at: string
   repository: {
@@ -96,11 +94,9 @@ export async function writeRepositoryIndexes(context: SyncContext): Promise<void
 }
 
 async function renderIndexMarkdown(context: SyncContext, kind: 'issue' | 'pull'): Promise<string> {
-  const rows = await Promise.all(
-    Object.values(context.syncState.items)
-      .filter(item => item.kind === kind)
-      .map(item => readIndexRow(context.storageDirAbsolute, item)),
-  )
+  const rows = Object.values(context.syncState.items)
+    .filter(item => item.kind === kind)
+    .map(item => readIndexRow(item))
   const openRows = sortRows(rows.filter(row => row.state === 'open'))
   const closedRows = sortRows(rows.filter(row => row.state === 'closed'))
 
@@ -126,69 +122,15 @@ async function renderIndexMarkdown(context: SyncContext, kind: 'issue' | 'pull')
   ].join('\n')
 }
 
-async function readIndexRow(storageDirAbsolute: string, item: SyncItemState): Promise<IndexRow> {
-  const markdownPath = join(storageDirAbsolute, item.filePath)
-  const fallbackTitle = inferTitle(item.filePath, item.number)
-
-  let title = fallbackTitle
-  let labels: string[] = []
-  let updatedAt = item.lastUpdatedAt
-
-  try {
-    const markdown = await readFile(markdownPath, 'utf8')
-    const frontmatter = parseFrontmatter(markdown)
-
-    if (typeof frontmatter?.title === 'string' && frontmatter.title.trim())
-      title = frontmatter.title.trim()
-    if (typeof frontmatter?.updated_at === 'string' && frontmatter.updated_at.trim())
-      updatedAt = frontmatter.updated_at.trim()
-    labels = normalizeFrontmatterLabels(frontmatter?.labels)
-  }
-  catch {
-    // Keep fallbacks when the mirrored markdown is missing or malformed.
-  }
-
+function readIndexRow(item: SyncItemState): IndexRow {
   return {
     number: item.number,
     state: item.state,
-    title,
-    labels,
-    updatedAt,
+    title: item.data.item.title,
+    labels: item.data.item.labels,
+    updatedAt: item.data.item.updatedAt,
     filePath: item.filePath,
   }
-}
-
-function inferTitle(filePath: string, number: number): string {
-  const fileName = basename(filePath, '.md')
-  const slug = fileName.replace(/^\d+-/, '')
-  if (!slug)
-    return `#${number}`
-  return slug.replace(/-/g, ' ')
-}
-
-function parseFrontmatter(markdown: string): Record<string, unknown> | undefined {
-  const match = markdown.match(/^---\n([\s\S]*?)\n---(?:\n|$)/)
-  if (!match)
-    return undefined
-
-  try {
-    const frontmatter = parseYaml(match[1])
-    if (!isRecord(frontmatter))
-      return undefined
-    return frontmatter
-  }
-  catch {
-    return undefined
-  }
-}
-
-function normalizeFrontmatterLabels(value: unknown): string[] {
-  if (!Array.isArray(value))
-    return []
-  return value
-    .filter((label): label is string => typeof label === 'string')
-    .map(label => label.trim())
-    .filter(Boolean)
 }
 
 function sortRows(rows: IndexRow[]): IndexRow[] {
@@ -232,7 +174,6 @@ async function buildRepoSnapshot(context: SyncContext): Promise<RepoSnapshot> {
     .sort((left, right) => left.number - right.number)
 
   return {
-    schema: 'ghfs/repo-doc@v1',
     repo: context.repoSlug,
     synced_at: context.syncedAt,
     repository: {

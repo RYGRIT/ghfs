@@ -5,17 +5,17 @@ import { describe, expect, it } from 'vitest'
 import { getSyncStatePath, loadSyncState, saveSyncState } from './state'
 
 describe('loadSyncState', () => {
-  it('normalizes legacy updatedAt to lastUpdatedAt and lastSyncedAt', async () => {
+  it('resets state when schema version is unsupported', async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'ghfs-sync-state-test-'))
     await writeFile(getSyncStatePath(storageDir), JSON.stringify({
       version: 1,
-      lastSyncedAt: '2026-01-01T00:00:00.000Z',
       items: {
         123: {
           number: 123,
           kind: 'issue',
           state: 'open',
-          updatedAt: '2026-01-03T00:00:00.000Z',
+          lastUpdatedAt: '2026-01-03T00:00:00.000Z',
+          lastSyncedAt: '2026-01-01T00:00:00.000Z',
           filePath: 'issues/00123-legacy-issue.md',
         },
       },
@@ -23,22 +23,19 @@ describe('loadSyncState', () => {
     }, null, 2), 'utf8')
 
     const state = await loadSyncState(storageDir)
-    expect(state.items['123']).toMatchObject({
-      number: 123,
-      kind: 'issue',
-      state: 'open',
-      lastUpdatedAt: '2026-01-03T00:00:00.000Z',
-      lastSyncedAt: '2026-01-01T00:00:00.000Z',
-      filePath: 'issues/00123-legacy-issue.md',
+    expect(state).toEqual({
+      version: 2,
+      items: {},
+      executions: [],
     })
 
     await rm(storageDir, { recursive: true, force: true })
   })
 
-  it('keeps backward compatibility when lastSyncRun is missing', async () => {
+  it('loads v2 state when telemetry is missing', async () => {
     const storageDir = await mkdtemp(join(tmpdir(), 'ghfs-sync-state-test-'))
     await writeFile(getSyncStatePath(storageDir), JSON.stringify({
-      version: 1,
+      version: 2,
       items: {},
       executions: [],
     }, null, 2), 'utf8')
@@ -54,10 +51,10 @@ describe('loadSyncState', () => {
     const expected = {
       runId: 'sync_abc',
       repo: 'owner/repo',
-      mode: 'incremental' as const,
       startedAt: '2026-01-01T00:00:00.000Z',
       finishedAt: '2026-01-01T00:00:10.000Z',
       durationMs: 10000,
+      requestCount: 12,
       since: '2026-01-01T00:00:00.000Z',
       numbersCount: 2,
       counters: {
@@ -71,17 +68,17 @@ describe('loadSyncState', () => {
         patchesDeleted: 0,
       },
       stages: {
-        resolve: 2,
+        metadata: 2,
+        pagination: 3,
         fetch: 3,
-        filter: 1,
-        sync: 4,
+        materialize: 4,
         prune: 2,
         save: 1,
       },
     }
 
     await saveSyncState(storageDir, {
-      version: 1,
+      version: 2,
       items: {},
       executions: [],
       lastSyncRun: expected,

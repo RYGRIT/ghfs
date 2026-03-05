@@ -37,7 +37,6 @@ describe('renderIssueMarkdown', () => {
       ],
     })
 
-    expect(markdown).toContain('schema: ghfs/issue-doc@v1')
     expect(markdown).toContain('url: https://github.com/antfu/ghfs/issues/1')
     expect(markdown).not.toContain('\nrepo:')
     expect(markdown).not.toContain('\nkind:')

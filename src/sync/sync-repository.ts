@@ -1,15 +1,15 @@
-import type { SyncMode, SyncOptions, SyncProgressSnapshot, SyncStage, SyncSummary } from './contracts'
-import type { IssueCandidates, SyncContext, SyncCounters } from './sync-repository-types'
+import type { SyncOptions, SyncProgressSnapshot, SyncStage, SyncSummary } from './contracts'
+import type { IssueCandidates, PreparedIssueCandidate, SyncContext, SyncCounters } from './sync-repository-types'
 import { randomBytes } from 'node:crypto'
 import { resolve } from 'pathe'
 import { createRepositoryProvider } from '../providers/factory'
 import { normalizeIssueNumbers, resolveSince } from '../utils/sync'
 import { loadSyncState, saveSyncState } from './state'
-import { syncIssueCandidate } from './sync-repository-item'
+import { materializePreparedIssue, prepareIssueCandidateSync } from './sync-repository-item'
 import { fetchIssueCandidatesByNumbers, fetchIssueCandidatesByPagination } from './sync-repository-provider'
 import { writeRepositoryIndexes, writeRepoSnapshot } from './sync-repository-snapshot'
 import { pruneMissingOpenTrackedItems, pruneTrackedClosedItems } from './sync-repository-storage'
-import { addItemStats, createCounters, shouldSyncIssue } from './sync-repository-utils'
+import { addItemStats, createCounters } from './sync-repository-utils'
 
 export async function syncRepository(options: SyncOptions): Promise<SyncSummary> {
   const reporter = options.reporter
@@ -34,13 +34,12 @@ export async function syncRepository(options: SyncOptions): Promise<SyncSummary>
   })
 
   let context: SyncContext | undefined
-  let candidates: IssueCandidates = {
-    issues: [],
-    scanned: 0,
-  }
-  let issues: IssueCandidates['issues'] = []
-  let mode: SyncMode = 'full'
   let since: string | undefined
+  let repoUpdatedAt: string | undefined
+  let candidates: IssueCandidates = { issues: [], scanned: 0 }
+  const preparedCandidates: PreparedIssueCandidate[] = []
+  let updatedIssues = 0
+  let updatedPulls = 0
 
   const runStage = async <T>(stage: SyncStage, message: string, fn: () => Promise<T>): Promise<T> => {
     reporter?.onStageStart?.({
@@ -74,15 +73,12 @@ export async function syncRepository(options: SyncOptions): Promise<SyncSummary>
   }
 
   try {
-    await runStage('resolve', 'Resolve sync context', async () => {
+    let shouldEarlyReturn = false
+
+    await runStage('metadata', 'Fetch repository metadata', async () => {
       const syncState = await loadSyncState(storageDirAbsolute)
       since = targetNumbers ? undefined : resolveSince(options, syncState)
       const syncedAt = new Date().toISOString()
-      mode = targetNumbers
-        ? 'targeted'
-        : since
-          ? 'incremental'
-          : 'full'
 
       context = {
         provider,
@@ -91,101 +87,125 @@ export async function syncRepository(options: SyncOptions): Promise<SyncSummary>
         config: options.config,
         syncState,
         syncedAt,
+        totalIssues: 0,
+        totalPulls: 0,
       }
+
+      if (targetNumbers)
+        return
+
+      const repository = await provider.fetchRepository()
+      repoUpdatedAt = repository.updated_at
+      if (!options.full && syncState.lastRepoUpdatedAt && syncState.lastRepoUpdatedAt === repoUpdatedAt)
+        shouldEarlyReturn = true
 
       reporter?.onStageUpdate?.({
-        stage: 'resolve',
+        stage: 'metadata',
         snapshot: cloneSnapshot(counters),
-        message: [
-          `mode=${mode}`,
-          targetNumbers ? `numbers=${targetNumbers.length}` : `since=${since ?? '(full)'}`,
-        ].join(' '),
+        message: `since=${since ?? '(full)'} repoUpdatedAt=${repoUpdatedAt}`,
       })
-    })
-
-    await runStage('fetch', 'Fetch issue and pull request candidates', async () => {
-      assertContext(context)
-      candidates = targetNumbers
-        ? await fetchIssueCandidatesByNumbers(context, targetNumbers)
-        : await fetchIssueCandidatesByPagination(context, since)
-      counters.scanned = candidates.scanned
-
-      reporter?.onStageUpdate?.({
-        stage: 'fetch',
-        snapshot: cloneSnapshot(counters),
-        message: `scanned=${counters.scanned}`,
-      })
-    })
-
-    await runStage('filter', 'Filter candidates by sync config', async () => {
-      issues = candidates.issues.filter(issue => shouldSyncIssue(options.config.sync, issue))
-      counters.selected = issues.length
-
-      reporter?.onStageUpdate?.({
-        stage: 'filter',
-        snapshot: cloneSnapshot(counters),
-        message: `selected=${counters.selected}`,
-      })
-    })
-
-    await runStage('sync', 'Sync items', async () => {
-      assertContext(context)
-      for (const issue of issues) {
-        addItemStats(counters, await syncIssueCandidate(context, issue))
-        counters.processed += 1
-
-        reporter?.onStageUpdate?.({
-          stage: 'sync',
-          snapshot: cloneSnapshot(counters),
-          message: `#${issue.number} ${issue.kind} ${issue.state}`,
-        })
-      }
-    })
-
-    await runStage('prune', 'Prune stale local artifacts', async () => {
-      assertContext(context)
-      if (options.config.sync.closed === false) {
-        counters.patchesDeleted += await pruneTrackedClosedItems(context.storageDirAbsolute, context.syncState, options.config.sync)
-      }
-
-      if (!targetNumbers && options.config.sync.closed === false && candidates.allOpenNumbers) {
-        counters.patchesDeleted += await pruneMissingOpenTrackedItems(
-          context.storageDirAbsolute,
-          context.syncState,
-          candidates.allOpenNumbers,
-          options.config.sync,
-        )
-      }
-
-      reporter?.onStageUpdate?.({
-        stage: 'prune',
-        snapshot: cloneSnapshot(counters),
-        message: `patchesDeleted=${counters.patchesDeleted}`,
-      })
-    })
-
-    await runStage('save', 'Save sync state', async () => {
-      assertContext(context)
-      context.syncState.repo = options.repo
-      if (!targetNumbers) {
-        context.syncState.lastSyncedAt = context.syncedAt
-        context.syncState.lastSince = since
-      }
-
-      await writeRepoSnapshot(context)
-      await writeRepositoryIndexes(context)
-      await saveSyncState(context.storageDirAbsolute, context.syncState)
     })
 
     assertContext(context)
+    const syncContext = context
+
+    if (!shouldEarlyReturn) {
+      await runStage('pagination', 'Pagination', async () => {
+        const paginatedSince = options.full ? undefined : since
+        candidates = targetNumbers
+          ? await fetchIssueCandidatesByNumbers(syncContext, targetNumbers)
+          : await fetchIssueCandidatesByPagination(syncContext, paginatedSince)
+        counters.scanned = candidates.scanned
+        counters.selected = candidates.issues.length
+
+        reporter?.onStageUpdate?.({
+          stage: 'pagination',
+          snapshot: cloneSnapshot(counters),
+          message: `scanned=${counters.scanned} selected=${counters.selected}`,
+        })
+      })
+
+      await runStage('fetch', 'Fetch updated issues/PRs', async () => {
+        for (const issue of candidates.issues) {
+          const prepared = await prepareIssueCandidateSync(syncContext, issue)
+          preparedCandidates.push(prepared)
+          counters.processed += 1
+          if (prepared.action === 'refetch' || prepared.action === 'create') {
+            if (prepared.kind === 'issue')
+              updatedIssues += 1
+            else
+              updatedPulls += 1
+          }
+
+          reporter?.onStageUpdate?.({
+            stage: 'fetch',
+            snapshot: cloneSnapshot(counters),
+            message: `#${issue.number} ${prepared.kind} ${prepared.action}`,
+          })
+        }
+      })
+
+      syncContext.syncState.repo = options.repo
+      if (!targetNumbers) {
+        syncContext.syncState.lastSyncedAt = syncContext.syncedAt
+        syncContext.syncState.lastSince = since
+        syncContext.syncState.lastRepoUpdatedAt = repoUpdatedAt
+      }
+      await saveSyncState(syncContext.storageDirAbsolute, syncContext.syncState)
+
+      await runStage('materialize', 'Materialize local files', async () => {
+        for (const prepared of preparedCandidates)
+          addItemStats(counters, await materializePreparedIssue(syncContext, prepared))
+      })
+
+      await runStage('prune', 'Prune stale local artifacts', async () => {
+        if (options.config.sync.closed === false) {
+          counters.patchesDeleted += await pruneTrackedClosedItems(syncContext.storageDirAbsolute, syncContext.syncState, options.config.sync)
+        }
+
+        if (!targetNumbers && options.config.sync.closed === false && candidates.allOpenNumbers) {
+          counters.patchesDeleted += await pruneMissingOpenTrackedItems(
+            syncContext.storageDirAbsolute,
+            syncContext.syncState,
+            candidates.allOpenNumbers,
+            options.config.sync,
+          )
+        }
+
+        reporter?.onStageUpdate?.({
+          stage: 'prune',
+          snapshot: cloneSnapshot(counters),
+          message: `patchesDeleted=${counters.patchesDeleted}`,
+        })
+      })
+    }
+
+    await runStage('save', 'Save sync state', async () => {
+      if (!shouldEarlyReturn) {
+        await writeRepoSnapshot(syncContext)
+        await writeRepositoryIndexes(syncContext)
+      }
+      await saveSyncState(syncContext.storageDirAbsolute, syncContext.syncState)
+    })
+
+    const totals = computeTotals(syncContext.syncState.items)
+    syncContext.totalIssues = totals.totalIssues
+    syncContext.totalPulls = totals.totalPulls
+
     const finishedAt = new Date()
     const durationMs = Math.max(0, finishedAt.getTime() - startedAt.getTime())
+    const requestCount = provider.getRequestCount()
 
     const summary: SyncSummary = {
       repo: options.repo,
-      mode,
       since,
-      syncedAt: context.syncedAt,
+      syncedAt: syncContext.syncedAt,
+      totalIssues: totals.totalIssues,
+      totalPulls: totals.totalPulls,
+      updatedIssues,
+      updatedPulls,
+      trackedItems: totals.trackedItems,
+      requestCount,
       scanned: counters.scanned,
       selected: counters.selected,
       processed: counters.processed,
@@ -197,28 +217,24 @@ export async function syncRepository(options: SyncOptions): Promise<SyncSummary>
       durationMs,
     }
 
-    context.syncState.lastSyncRun = {
+    syncContext.syncState.lastSyncRun = {
       runId,
       repo: options.repo,
-      mode,
       startedAt: startedAtIso,
       finishedAt: finishedAt.toISOString(),
       durationMs,
+      requestCount,
       since,
       numbersCount: targetNumbers?.length,
       counters: cloneSnapshot(counters),
-      stages: {
-        ...stageDurations,
-      },
+      stages: { ...stageDurations },
     }
 
-    await saveSyncState(context.storageDirAbsolute, context.syncState)
+    await saveSyncState(syncContext.storageDirAbsolute, syncContext.syncState)
 
     reporter?.onComplete?.({
       summary,
-      stages: {
-        ...stageDurations,
-      },
+      stages: { ...stageDurations },
     })
 
     return summary
@@ -245,10 +261,10 @@ function createSyncRunId(): string {
 
 function createStageDurations(): Record<SyncStage, number> {
   return {
-    resolve: 0,
+    metadata: 0,
+    pagination: 0,
     fetch: 0,
-    filter: 0,
-    sync: 0,
+    materialize: 0,
     prune: 0,
     save: 0,
   }
@@ -264,5 +280,25 @@ function cloneSnapshot(counters: SyncCounters): SyncProgressSnapshot {
     moved: counters.moved,
     patchesWritten: counters.patchesWritten,
     patchesDeleted: counters.patchesDeleted,
+  }
+}
+
+function computeTotals(items: SyncContext['syncState']['items']): {
+  totalIssues: number
+  totalPulls: number
+  trackedItems: number
+} {
+  let totalIssues = 0
+  let totalPulls = 0
+  for (const item of Object.values(items)) {
+    if (item.kind === 'issue')
+      totalIssues += 1
+    else
+      totalPulls += 1
+  }
+  return {
+    totalIssues,
+    totalPulls,
+    trackedItems: totalIssues + totalPulls,
   }
 }

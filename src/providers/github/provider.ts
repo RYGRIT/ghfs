@@ -14,6 +14,8 @@ import type {
 import { collectPages, iteratePages } from '../helpers'
 import { createGitHubClient } from './client'
 
+type BumpRequestCount = () => void
+
 export interface CreateGitHubProviderOptions {
   token: string
   owner: string
@@ -23,39 +25,44 @@ export interface CreateGitHubProviderOptions {
 export function createGitHubProvider(options: CreateGitHubProviderOptions): RepositoryProvider {
   const octokit = createGitHubClient(options.token)
   const { owner, repo } = options
+  let requestCount = 0
+  const bumpRequestCount = () => {
+    requestCount += 1
+  }
 
   return {
-    paginateItems: paginateOptions => paginateItems(octokit, owner, repo, paginateOptions),
-    fetchItems: paginateOptions => fetchItems(octokit, owner, repo, paginateOptions),
-    eachItem: paginateOptions => eachItem(octokit, owner, repo, paginateOptions),
-    fetchItemsByNumbers: numbers => fetchItemsByNumbers(octokit, owner, repo, numbers),
-    fetchComments: number => fetchComments(octokit, owner, repo, number),
-    fetchPullMetadata: number => fetchPullMetadata(octokit, owner, repo, number),
-    fetchPullPatch: number => fetchPullPatch(octokit, owner, repo, number),
-    fetchItemSnapshot: number => fetchItemSnapshot(octokit, owner, repo, number),
-    fetchRepository: () => fetchRepository(octokit, owner, repo),
-    fetchRepositoryLabels: () => fetchRepositoryLabels(octokit, owner, repo),
-    fetchRepositoryMilestones: () => fetchRepositoryMilestones(octokit, owner, repo),
+    paginateItems: paginateOptions => paginateItems(octokit, owner, repo, paginateOptions, bumpRequestCount),
+    fetchItems: paginateOptions => fetchItems(octokit, owner, repo, paginateOptions, bumpRequestCount),
+    eachItem: paginateOptions => eachItem(octokit, owner, repo, paginateOptions, bumpRequestCount),
+    fetchItemsByNumbers: numbers => fetchItemsByNumbers(octokit, owner, repo, numbers, bumpRequestCount),
+    fetchComments: number => fetchComments(octokit, owner, repo, number, bumpRequestCount),
+    fetchPullMetadata: number => fetchPullMetadata(octokit, owner, repo, number, bumpRequestCount),
+    fetchPullPatch: number => fetchPullPatch(octokit, owner, repo, number, bumpRequestCount),
+    fetchItemSnapshot: number => fetchItemSnapshot(octokit, owner, repo, number, bumpRequestCount),
+    fetchRepository: () => fetchRepository(octokit, owner, repo, bumpRequestCount),
+    fetchRepositoryLabels: () => fetchRepositoryLabels(octokit, owner, repo, bumpRequestCount),
+    fetchRepositoryMilestones: () => fetchRepositoryMilestones(octokit, owner, repo, bumpRequestCount),
+    getRequestCount: () => requestCount,
 
-    actionClose: number => actionClose(octokit, owner, repo, number),
-    actionReopen: number => actionReopen(octokit, owner, repo, number),
-    actionSetTitle: (number, title) => actionSetTitle(octokit, owner, repo, number, title),
-    actionSetBody: (number, body) => actionSetBody(octokit, owner, repo, number, body),
-    actionAddComment: (number, body) => actionAddComment(octokit, owner, repo, number, body),
-    actionAddLabels: (number, labels) => actionAddLabels(octokit, owner, repo, number, labels),
-    actionRemoveLabels: (number, labels) => actionRemoveLabels(octokit, owner, repo, number, labels),
-    actionSetLabels: (number, labels) => actionSetLabels(octokit, owner, repo, number, labels),
-    actionAddAssignees: (number, assignees) => actionAddAssignees(octokit, owner, repo, number, assignees),
-    actionRemoveAssignees: (number, assignees) => actionRemoveAssignees(octokit, owner, repo, number, assignees),
-    actionSetAssignees: (number, assignees) => actionSetAssignees(octokit, owner, repo, number, assignees),
-    actionSetMilestone: (number, milestone) => actionSetMilestone(octokit, owner, repo, number, milestone),
-    actionClearMilestone: number => actionClearMilestone(octokit, owner, repo, number),
-    actionLock: (number, reason) => actionLock(octokit, owner, repo, number, reason),
-    actionUnlock: number => actionUnlock(octokit, owner, repo, number),
-    actionRequestReviewers: (number, reviewers) => actionRequestReviewers(octokit, owner, repo, number, reviewers),
-    actionRemoveReviewers: (number, reviewers) => actionRemoveReviewers(octokit, owner, repo, number, reviewers),
-    actionMarkReadyForReview: number => actionMarkReadyForReview(octokit, owner, repo, number),
-    actionConvertToDraft: number => actionConvertToDraft(octokit, owner, repo, number),
+    actionClose: number => actionClose(octokit, owner, repo, number, bumpRequestCount),
+    actionReopen: number => actionReopen(octokit, owner, repo, number, bumpRequestCount),
+    actionSetTitle: (number, title) => actionSetTitle(octokit, owner, repo, number, title, bumpRequestCount),
+    actionSetBody: (number, body) => actionSetBody(octokit, owner, repo, number, body, bumpRequestCount),
+    actionAddComment: (number, body) => actionAddComment(octokit, owner, repo, number, body, bumpRequestCount),
+    actionAddLabels: (number, labels) => actionAddLabels(octokit, owner, repo, number, labels, bumpRequestCount),
+    actionRemoveLabels: (number, labels) => actionRemoveLabels(octokit, owner, repo, number, labels, bumpRequestCount),
+    actionSetLabels: (number, labels) => actionSetLabels(octokit, owner, repo, number, labels, bumpRequestCount),
+    actionAddAssignees: (number, assignees) => actionAddAssignees(octokit, owner, repo, number, assignees, bumpRequestCount),
+    actionRemoveAssignees: (number, assignees) => actionRemoveAssignees(octokit, owner, repo, number, assignees, bumpRequestCount),
+    actionSetAssignees: (number, assignees) => actionSetAssignees(octokit, owner, repo, number, assignees, bumpRequestCount),
+    actionSetMilestone: (number, milestone) => actionSetMilestone(octokit, owner, repo, number, milestone, bumpRequestCount),
+    actionClearMilestone: number => actionClearMilestone(octokit, owner, repo, number, bumpRequestCount),
+    actionLock: (number, reason) => actionLock(octokit, owner, repo, number, reason, bumpRequestCount),
+    actionUnlock: number => actionUnlock(octokit, owner, repo, number, bumpRequestCount),
+    actionRequestReviewers: (number, reviewers) => actionRequestReviewers(octokit, owner, repo, number, reviewers, bumpRequestCount),
+    actionRemoveReviewers: (number, reviewers) => actionRemoveReviewers(octokit, owner, repo, number, reviewers, bumpRequestCount),
+    actionMarkReadyForReview: number => actionMarkReadyForReview(octokit, owner, repo, number, bumpRequestCount),
+    actionConvertToDraft: number => actionConvertToDraft(octokit, owner, repo, number, bumpRequestCount),
   }
 }
 
@@ -64,6 +71,7 @@ async function* paginateItems(
   owner: string,
   repo: string,
   options: PaginateItemsOptions,
+  bumpRequestCount: BumpRequestCount,
 ): AsyncIterable<ProviderItem[]> {
   const iterator = octokit.paginate.iterator(octokit.rest.issues.listForRepo, {
     owner,
@@ -75,8 +83,10 @@ async function* paginateItems(
     since: options.since,
   }) as AsyncIterable<{ data: GitHubIssue[] }>
 
-  for await (const page of iterator)
+  for await (const page of iterator) {
+    bumpRequestCount()
     yield page.data.map(mapIssue)
+  }
 }
 
 async function fetchItems(
@@ -84,8 +94,9 @@ async function fetchItems(
   owner: string,
   repo: string,
   options: PaginateItemsOptions,
+  bumpRequestCount: BumpRequestCount,
 ): Promise<ProviderItem[]> {
-  return await collectPages(paginateItems(octokit, owner, repo, options))
+  return await collectPages(paginateItems(octokit, owner, repo, options, bumpRequestCount))
 }
 
 async function* eachItem(
@@ -93,13 +104,21 @@ async function* eachItem(
   owner: string,
   repo: string,
   options: PaginateItemsOptions,
+  bumpRequestCount: BumpRequestCount,
 ): AsyncIterable<ProviderItem> {
-  yield* iteratePages(paginateItems(octokit, owner, repo, options))
+  yield* iteratePages(paginateItems(octokit, owner, repo, options, bumpRequestCount))
 }
 
-async function fetchItemsByNumbers(octokit: Octokit, owner: string, repo: string, numbers: number[]): Promise<ProviderItem[]> {
+async function fetchItemsByNumbers(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  numbers: number[],
+  bumpRequestCount: BumpRequestCount,
+): Promise<ProviderItem[]> {
   const items = await Promise.all(
     numbers.map(async (number) => {
+      bumpRequestCount()
       const result = await octokit.rest.issues.get({
         owner,
         repo,
@@ -112,7 +131,14 @@ async function fetchItemsByNumbers(octokit: Octokit, owner: string, repo: string
   return items.sort((a, b) => a.number - b.number)
 }
 
-async function fetchComments(octokit: Octokit, owner: string, repo: string, number: number): Promise<ProviderComment[]> {
+async function fetchComments(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  number: number,
+  bumpRequestCount: BumpRequestCount,
+): Promise<ProviderComment[]> {
+  bumpRequestCount()
   const comments = await octokit.paginate(octokit.rest.issues.listComments, {
     owner,
     repo,
@@ -123,7 +149,14 @@ async function fetchComments(octokit: Octokit, owner: string, repo: string, numb
   return comments.map(mapComment)
 }
 
-async function fetchPullMetadata(octokit: Octokit, owner: string, repo: string, number: number): Promise<ProviderPullMetadata> {
+async function fetchPullMetadata(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  number: number,
+  bumpRequestCount: BumpRequestCount,
+): Promise<ProviderPullMetadata> {
+  bumpRequestCount()
   const result = await octokit.rest.pulls.get({
     owner,
     repo,
@@ -141,7 +174,14 @@ async function fetchPullMetadata(octokit: Octokit, owner: string, repo: string, 
   }
 }
 
-async function fetchPullPatch(octokit: Octokit, owner: string, repo: string, number: number): Promise<string> {
+async function fetchPullPatch(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  number: number,
+  bumpRequestCount: BumpRequestCount,
+): Promise<string> {
+  bumpRequestCount()
   const result = await octokit.request('GET /repos/{owner}/{repo}/pulls/{pull_number}', {
     owner,
     repo,
@@ -157,7 +197,14 @@ async function fetchPullPatch(octokit: Octokit, owner: string, repo: string, num
   throw new Error(`Unexpected patch response for pull #${number}`)
 }
 
-async function fetchItemSnapshot(octokit: Octokit, owner: string, repo: string, number: number): Promise<ProviderItemSnapshot> {
+async function fetchItemSnapshot(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  number: number,
+  bumpRequestCount: BumpRequestCount,
+): Promise<ProviderItemSnapshot> {
+  bumpRequestCount()
   const result = await octokit.rest.issues.get({
     owner,
     repo,
@@ -172,12 +219,14 @@ async function fetchItemSnapshot(octokit: Octokit, owner: string, repo: string, 
   }
 }
 
-async function fetchRepository(octokit: Octokit, owner: string, repo: string): Promise<ProviderRepository> {
+async function fetchRepository(octokit: Octokit, owner: string, repo: string, bumpRequestCount: BumpRequestCount): Promise<ProviderRepository> {
+  bumpRequestCount()
   const result = await octokit.rest.repos.get({ owner, repo })
   return result.data as ProviderRepository
 }
 
-async function fetchRepositoryLabels(octokit: Octokit, owner: string, repo: string): Promise<ProviderLabel[]> {
+async function fetchRepositoryLabels(octokit: Octokit, owner: string, repo: string, bumpRequestCount: BumpRequestCount): Promise<ProviderLabel[]> {
+  bumpRequestCount()
   return await octokit.paginate(octokit.rest.issues.listLabelsForRepo, {
     owner,
     repo,
@@ -185,7 +234,8 @@ async function fetchRepositoryLabels(octokit: Octokit, owner: string, repo: stri
   }) as ProviderLabel[]
 }
 
-async function fetchRepositoryMilestones(octokit: Octokit, owner: string, repo: string): Promise<ProviderMilestone[]> {
+async function fetchRepositoryMilestones(octokit: Octokit, owner: string, repo: string, bumpRequestCount: BumpRequestCount): Promise<ProviderMilestone[]> {
+  bumpRequestCount()
   return await octokit.paginate(octokit.rest.issues.listMilestones, {
     owner,
     repo,
@@ -194,33 +244,75 @@ async function fetchRepositoryMilestones(octokit: Octokit, owner: string, repo: 
   }) as ProviderMilestone[]
 }
 
-async function actionClose(octokit: Octokit, owner: string, repo: string, number: number): Promise<void> {
+async function actionClose(octokit: Octokit, owner: string, repo: string, number: number, bumpRequestCount: BumpRequestCount): Promise<void> {
+  bumpRequestCount()
   await octokit.rest.issues.update({ owner, repo, issue_number: number, state: 'closed' })
 }
 
-async function actionReopen(octokit: Octokit, owner: string, repo: string, number: number): Promise<void> {
+async function actionReopen(octokit: Octokit, owner: string, repo: string, number: number, bumpRequestCount: BumpRequestCount): Promise<void> {
+  bumpRequestCount()
   await octokit.rest.issues.update({ owner, repo, issue_number: number, state: 'open' })
 }
 
-async function actionSetTitle(octokit: Octokit, owner: string, repo: string, number: number, title: string): Promise<void> {
+async function actionSetTitle(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  number: number,
+  title: string,
+  bumpRequestCount: BumpRequestCount,
+): Promise<void> {
+  bumpRequestCount()
   await octokit.rest.issues.update({ owner, repo, issue_number: number, title })
 }
 
-async function actionSetBody(octokit: Octokit, owner: string, repo: string, number: number, body: string): Promise<void> {
+async function actionSetBody(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  number: number,
+  body: string,
+  bumpRequestCount: BumpRequestCount,
+): Promise<void> {
+  bumpRequestCount()
   await octokit.rest.issues.update({ owner, repo, issue_number: number, body })
 }
 
-async function actionAddComment(octokit: Octokit, owner: string, repo: string, number: number, body: string): Promise<void> {
+async function actionAddComment(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  number: number,
+  body: string,
+  bumpRequestCount: BumpRequestCount,
+): Promise<void> {
+  bumpRequestCount()
   await octokit.rest.issues.createComment({ owner, repo, issue_number: number, body })
 }
 
-async function actionAddLabels(octokit: Octokit, owner: string, repo: string, number: number, labels: string[]): Promise<void> {
+async function actionAddLabels(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  number: number,
+  labels: string[],
+  bumpRequestCount: BumpRequestCount,
+): Promise<void> {
+  bumpRequestCount()
   await octokit.rest.issues.addLabels({ owner, repo, issue_number: number, labels })
 }
 
-async function actionRemoveLabels(octokit: Octokit, owner: string, repo: string, number: number, labels: string[]): Promise<void> {
+async function actionRemoveLabels(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  number: number,
+  labels: string[],
+  bumpRequestCount: BumpRequestCount,
+): Promise<void> {
   for (const label of labels) {
     try {
+      bumpRequestCount()
       await octokit.rest.issues.removeLabel({ owner, repo, issue_number: number, name: label })
     }
     catch (error) {
@@ -231,32 +323,87 @@ async function actionRemoveLabels(octokit: Octokit, owner: string, repo: string,
   }
 }
 
-async function actionSetLabels(octokit: Octokit, owner: string, repo: string, number: number, labels: string[]): Promise<void> {
+async function actionSetLabels(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  number: number,
+  labels: string[],
+  bumpRequestCount: BumpRequestCount,
+): Promise<void> {
+  bumpRequestCount()
   await octokit.rest.issues.setLabels({ owner, repo, issue_number: number, labels })
 }
 
-async function actionAddAssignees(octokit: Octokit, owner: string, repo: string, number: number, assignees: string[]): Promise<void> {
+async function actionAddAssignees(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  number: number,
+  assignees: string[],
+  bumpRequestCount: BumpRequestCount,
+): Promise<void> {
+  bumpRequestCount()
   await octokit.rest.issues.addAssignees({ owner, repo, issue_number: number, assignees })
 }
 
-async function actionRemoveAssignees(octokit: Octokit, owner: string, repo: string, number: number, assignees: string[]): Promise<void> {
+async function actionRemoveAssignees(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  number: number,
+  assignees: string[],
+  bumpRequestCount: BumpRequestCount,
+): Promise<void> {
+  bumpRequestCount()
   await octokit.rest.issues.removeAssignees({ owner, repo, issue_number: number, assignees })
 }
 
-async function actionSetAssignees(octokit: Octokit, owner: string, repo: string, number: number, assignees: string[]): Promise<void> {
+async function actionSetAssignees(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  number: number,
+  assignees: string[],
+  bumpRequestCount: BumpRequestCount,
+): Promise<void> {
+  bumpRequestCount()
   await octokit.rest.issues.update({ owner, repo, issue_number: number, assignees })
 }
 
-async function actionSetMilestone(octokit: Octokit, owner: string, repo: string, number: number, milestone: string | number): Promise<void> {
-  const resolvedMilestone = await resolveMilestone(octokit, owner, repo, milestone)
+async function actionSetMilestone(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  number: number,
+  milestone: string | number,
+  bumpRequestCount: BumpRequestCount,
+): Promise<void> {
+  const resolvedMilestone = await resolveMilestone(octokit, owner, repo, milestone, bumpRequestCount)
+  bumpRequestCount()
   await octokit.rest.issues.update({ owner, repo, issue_number: number, milestone: resolvedMilestone })
 }
 
-async function actionClearMilestone(octokit: Octokit, owner: string, repo: string, number: number): Promise<void> {
+async function actionClearMilestone(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  number: number,
+  bumpRequestCount: BumpRequestCount,
+): Promise<void> {
+  bumpRequestCount()
   await octokit.rest.issues.update({ owner, repo, issue_number: number, milestone: null })
 }
 
-async function actionLock(octokit: Octokit, owner: string, repo: string, number: number, reason?: ProviderLockReason): Promise<void> {
+async function actionLock(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  number: number,
+  reason: ProviderLockReason | undefined,
+  bumpRequestCount: BumpRequestCount,
+): Promise<void> {
+  bumpRequestCount()
   await octokit.rest.issues.lock({
     owner,
     repo,
@@ -265,11 +412,20 @@ async function actionLock(octokit: Octokit, owner: string, repo: string, number:
   })
 }
 
-async function actionUnlock(octokit: Octokit, owner: string, repo: string, number: number): Promise<void> {
+async function actionUnlock(octokit: Octokit, owner: string, repo: string, number: number, bumpRequestCount: BumpRequestCount): Promise<void> {
+  bumpRequestCount()
   await octokit.rest.issues.unlock({ owner, repo, issue_number: number })
 }
 
-async function actionRequestReviewers(octokit: Octokit, owner: string, repo: string, number: number, reviewers: string[]): Promise<void> {
+async function actionRequestReviewers(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  number: number,
+  reviewers: string[],
+  bumpRequestCount: BumpRequestCount,
+): Promise<void> {
+  bumpRequestCount()
   await octokit.rest.pulls.requestReviewers({
     owner,
     repo,
@@ -278,7 +434,15 @@ async function actionRequestReviewers(octokit: Octokit, owner: string, repo: str
   })
 }
 
-async function actionRemoveReviewers(octokit: Octokit, owner: string, repo: string, number: number, reviewers: string[]): Promise<void> {
+async function actionRemoveReviewers(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  number: number,
+  reviewers: string[],
+  bumpRequestCount: BumpRequestCount,
+): Promise<void> {
+  bumpRequestCount()
   await octokit.rest.pulls.removeRequestedReviewers({
     owner,
     repo,
@@ -287,7 +451,14 @@ async function actionRemoveReviewers(octokit: Octokit, owner: string, repo: stri
   })
 }
 
-async function actionMarkReadyForReview(octokit: Octokit, owner: string, repo: string, number: number): Promise<void> {
+async function actionMarkReadyForReview(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  number: number,
+  bumpRequestCount: BumpRequestCount,
+): Promise<void> {
+  bumpRequestCount()
   await octokit.request('POST /repos/{owner}/{repo}/pulls/{pull_number}/ready_for_review', {
     owner,
     repo,
@@ -295,7 +466,14 @@ async function actionMarkReadyForReview(octokit: Octokit, owner: string, repo: s
   })
 }
 
-async function actionConvertToDraft(octokit: Octokit, owner: string, repo: string, number: number): Promise<void> {
+async function actionConvertToDraft(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  number: number,
+  bumpRequestCount: BumpRequestCount,
+): Promise<void> {
+  bumpRequestCount()
   await octokit.request('POST /repos/{owner}/{repo}/pulls/{pull_number}/convert-to-draft', {
     owner,
     repo,
@@ -303,13 +481,20 @@ async function actionConvertToDraft(octokit: Octokit, owner: string, repo: strin
   })
 }
 
-async function resolveMilestone(octokit: Octokit, owner: string, repo: string, value: string | number): Promise<number> {
+async function resolveMilestone(
+  octokit: Octokit,
+  owner: string,
+  repo: string,
+  value: string | number,
+  bumpRequestCount: BumpRequestCount,
+): Promise<number> {
   if (typeof value === 'number')
     return value
 
   if (/^\d+$/.test(value))
     return Number(value)
 
+  bumpRequestCount()
   const milestones = await octokit.paginate(octokit.rest.issues.listMilestones, {
     owner,
     repo,

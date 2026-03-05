@@ -99,6 +99,7 @@ export interface RepositoryProvider {
   fetchRepository: () => Promise<ProviderRepository>
   fetchRepositoryLabels: () => Promise<ProviderLabel[]>
   fetchRepositoryMilestones: () => Promise<ProviderMilestone[]>
+  getRequestCount: () => number
 
   actionClose: (number: number) => Promise<void>
   actionReopen: (number: number) => Promise<void>

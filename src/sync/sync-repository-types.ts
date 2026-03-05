@@ -50,6 +50,8 @@ export interface SyncContext {
   config: GhfsResolvedConfig
   syncState: SyncState
   syncedAt: string
+  totalIssues: number
+  totalPulls: number
 }
 
 export interface IssueCandidates {
@@ -77,11 +79,24 @@ export interface PatchPlan {
 }
 
 export interface ItemSyncStats {
+  kind: IssueKind
+  action: IssueSyncAction
   skipped: number
   written: number
   moved: number
   patchesWritten: number
   patchesDeleted: number
+}
+
+export type IssueSyncAction = 'skip' | 'refetch' | 'create' | 'move' | 'remove'
+
+export interface PreparedIssueCandidate {
+  number: number
+  kind: IssueKind
+  state: IssueState
+  action: IssueSyncAction
+  paths: IssuePaths
+  patchPlan: PatchPlan
 }
 
 export interface SyncCounters extends SyncProgressSnapshot {}

@@ -1,11 +1,10 @@
 import type { GhfsResolvedConfig, SyncState } from '../types'
 import type { ProviderLabel, ProviderMilestone, ProviderRepository, RepositoryProvider } from '../types/provider'
 import type { SyncContext } from './sync-repository-types'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { dirname, join } from 'pathe'
+import { join } from 'pathe'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { stringify } from 'yaml'
 import { writeRepositoryIndexes, writeRepoSnapshot } from './sync-repository-snapshot'
 
 describe('snapshot writers', () => {
@@ -17,42 +16,16 @@ describe('snapshot writers', () => {
     const cwd = await mkdtemp(join(tmpdir(), 'ghfs-sync-snapshot-test-'))
     const storageDir = join(cwd, '.ghfs')
     const syncState: SyncState = {
-      version: 1,
+      version: 2,
       items: {
         8: createTrackedState(8, 'issue', 'open', '2026-01-30T00:00:00.000Z', 'issues/00008-issue-8.md'),
-        9: createTrackedState(9, 'issue', 'closed', '2026-01-31T00:00:00.000Z', 'issues/closed/00009-issue-9.md'),
-        10: createTrackedState(10, 'issue', 'open', '2026-02-01T00:00:00.000Z', 'issues/00010-issue-10.md'),
-        2: createTrackedState(2, 'pull', 'closed', '2026-02-01T05:00:00.000Z', 'pulls/closed/00002-pr-2.md'),
-        3: createTrackedState(3, 'pull', 'open', '2026-02-02T00:00:00.000Z', 'pulls/00003-pr-3.md'),
+        9: createTrackedState(9, 'issue', 'closed', '2026-01-31T00:00:00.000Z', 'issues/closed/00009-issue-9.md', ['bug']),
+        10: createTrackedState(10, 'issue', 'open', '2026-02-01T00:00:00.000Z', 'issues/00010-issue-10.md', ['enhancement']),
+        2: createTrackedState(2, 'pull', 'closed', '2026-02-01T05:00:00.000Z', 'pulls/closed/00002-pr-2.md', ['release']),
+        3: createTrackedState(3, 'pull', 'open', '2026-02-02T00:00:00.000Z', 'pulls/00003-pr-3.md', ['review']),
       },
       executions: [],
     }
-
-    await writeMirrorMarkdown(storageDir, 'issues/00008-issue-8.md', {
-      title: 'Issue 8',
-      labels: [],
-      updated_at: '2026-01-30T00:00:00.000Z',
-    })
-    await writeMirrorMarkdown(storageDir, 'issues/closed/00009-issue-9.md', {
-      title: 'Issue 9',
-      labels: ['bug'],
-      updated_at: '2026-01-31T00:00:00.000Z',
-    })
-    await writeMirrorMarkdown(storageDir, 'issues/00010-issue-10.md', {
-      title: 'Issue 10',
-      labels: ['enhancement'],
-      updated_at: '2026-02-01T00:00:00.000Z',
-    })
-    await writeMirrorMarkdown(storageDir, 'pulls/closed/00002-pr-2.md', {
-      title: 'Pull 2',
-      labels: ['release'],
-      updated_at: '2026-02-01T05:00:00.000Z',
-    })
-    await writeMirrorMarkdown(storageDir, 'pulls/00003-pr-3.md', {
-      title: 'Pull 3',
-      labels: ['review'],
-      updated_at: '2026-02-02T00:00:00.000Z',
-    })
 
     const context = createContext(storageDir, syncState)
     await writeRepositoryIndexes(context)
@@ -76,24 +49,22 @@ describe('snapshot writers', () => {
     await rm(cwd, { recursive: true, force: true })
   })
 
-  it('falls back safely when mirrored markdown frontmatter is missing or malformed', async () => {
+  it('uses canonical sync state data even when markdown file is missing', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'ghfs-sync-snapshot-test-'))
     const storageDir = join(cwd, '.ghfs')
     const syncState: SyncState = {
-      version: 1,
+      version: 2,
       items: {
         1: createTrackedState(1, 'issue', 'open', '2026-01-03T00:00:00.000Z', 'issues/00001-broken-title.md'),
       },
       executions: [],
     }
 
-    await writeTrackedFile(storageDir, 'issues/00001-broken-title.md', '# Broken markdown\n')
-
     const context = createContext(storageDir, syncState)
     await writeRepositoryIndexes(context)
 
     const issuesIndex = await readFile(join(storageDir, 'issues.md'), 'utf8')
-    expect(issuesIndex).toContain('| #1 | broken title | - | 2026-01-03T00:00:00.000Z | [issues/00001-broken-title.md](issues/00001-broken-title.md) |')
+    expect(issuesIndex).toContain('| #1 | Issue 1 | - | 2026-01-03T00:00:00.000Z | [issues/00001-broken-title.md](issues/00001-broken-title.md) |')
 
     await rm(cwd, { recursive: true, force: true })
   })
@@ -102,7 +73,7 @@ describe('snapshot writers', () => {
     const cwd = await mkdtemp(join(tmpdir(), 'ghfs-sync-snapshot-test-'))
     const storageDir = join(cwd, '.ghfs')
     const syncState: SyncState = {
-      version: 1,
+      version: 2,
       items: {},
       executions: [],
     }
@@ -121,7 +92,6 @@ describe('snapshot writers', () => {
     await writeRepoSnapshot(context)
 
     const repoSnapshot = JSON.parse(await readFile(join(storageDir, 'repo.json'), 'utf8')) as {
-      schema: string
       repo: string
       synced_at: string
       labels: Array<{ name: string }>
@@ -129,7 +99,6 @@ describe('snapshot writers', () => {
       repository: { owner: string, full_name: string }
     }
 
-    expect(repoSnapshot.schema).toBe('ghfs/repo-doc@v1')
     expect(repoSnapshot.repo).toBe('owner/repo')
     expect(repoSnapshot.synced_at).toBe('2026-02-10T00:00:00.000Z')
     expect(repoSnapshot.repository.owner).toBe('owner')
@@ -148,7 +117,9 @@ function createTrackedState(
   state: 'open' | 'closed',
   updatedAt: string,
   filePath: string,
+  labels: string[] = [],
 ): SyncState['items'][string] {
+  const title = kind === 'issue' ? `Issue ${number}` : `Pull ${number}`
   return {
     number,
     kind,
@@ -156,6 +127,35 @@ function createTrackedState(
     lastUpdatedAt: updatedAt,
     lastSyncedAt: updatedAt,
     filePath,
+    data: {
+      item: {
+        number,
+        kind,
+        state,
+        updatedAt,
+        createdAt: '2026-01-01T00:00:00.000Z',
+        closedAt: state === 'closed' ? updatedAt : null,
+        title,
+        body: `${title} body`,
+        author: 'user',
+        labels,
+        assignees: [],
+        milestone: null,
+      },
+      comments: [],
+      ...(kind === 'pull'
+        ? {
+            pull: {
+              isDraft: false,
+              merged: false,
+              mergedAt: null,
+              baseRef: 'main',
+              headRef: 'feature',
+              requestedReviewers: [],
+            },
+          }
+        : {}),
+    },
   }
 }
 
@@ -215,6 +215,8 @@ function createContext(
     config,
     syncState,
     syncedAt: '2026-02-10T00:00:00.000Z',
+    totalIssues: 0,
+    totalPulls: 0,
   }
 }
 
@@ -264,6 +266,7 @@ function createProviderMock(overrides: Partial<RepositoryProvider> = {}): Reposi
     })),
     fetchRepositoryLabels: vi.fn(async () => []),
     fetchRepositoryMilestones: vi.fn(async () => []),
+    getRequestCount: vi.fn(() => 0),
     actionClose: vi.fn(async () => {}),
     actionReopen: vi.fn(async () => {}),
     actionSetTitle: vi.fn(async () => {}),
@@ -285,35 +288,6 @@ function createProviderMock(overrides: Partial<RepositoryProvider> = {}): Reposi
     actionConvertToDraft: vi.fn(async () => {}),
     ...overrides,
   }
-}
-
-async function writeMirrorMarkdown(
-  storageDirAbsolute: string,
-  relativePath: string,
-  frontmatter: {
-    title: string
-    labels: string[]
-    updated_at: string
-  },
-): Promise<void> {
-  const markdown = [
-    '---',
-    stringify(frontmatter).trimEnd(),
-    '---',
-    '',
-    `# ${frontmatter.title}`,
-    '',
-    'Body',
-    '',
-  ].join('\n')
-
-  await writeTrackedFile(storageDirAbsolute, relativePath, markdown)
-}
-
-async function writeTrackedFile(storageDirAbsolute: string, relativePath: string, content: string): Promise<void> {
-  const absolutePath = join(storageDirAbsolute, relativePath)
-  await mkdir(dirname(absolutePath), { recursive: true })
-  await writeFile(absolutePath, content, 'utf8')
 }
 
 function milestone(number: number, title: string, state: 'open' | 'closed'): ProviderMilestone {
