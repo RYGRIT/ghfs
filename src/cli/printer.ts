@@ -3,6 +3,7 @@ import type { SyncReporter, SyncStage } from '../sync'
 import process from 'node:process'
 import * as p from '@clack/prompts'
 import c from 'ansis'
+import { ASCII_HEADER, toGitHubRepoUrl } from './meta'
 
 export type PrinterMode = 'rich' | 'plain'
 export type PrinterKeyValueEntry = readonly [key: string, value: string | number | Date | undefined | null]
@@ -15,13 +16,14 @@ export interface CreateCliPrinterOptions {
 
 export interface CliPrinter {
   mode: PrinterMode
+  header: (repo: string) => void
   start: (message: string) => void
   step: (message: string) => void
   info: (message: string) => void
   success: (message: string) => void
   warn: (message: string) => void
   error: (message: string) => void
-  done: (message: string) => void
+  done: (message?: string) => void
   note: (message: string, title?: string) => void
   table: (
     title: string,
@@ -64,11 +66,18 @@ export function createCliPrinter(command: string, options: CreateCliPrinterOptio
 
   const printer: CliPrinter = {
     mode,
+    header(repo) {
+      if (mode !== 'rich')
+        return
+      write(ASCII_HEADER(formatTerminalLink(repo, toGitHubRepoUrl(repo))))
+    },
     start(message) {
-      if (mode === 'rich')
-        p.intro(`ghfs ${command}: ${message}`)
-      else
+      if (mode === 'rich') {
+        p.intro(message)
+      }
+      else {
         write(message)
+      }
     },
     step(message) {
       if (mode === 'rich')
@@ -142,6 +151,10 @@ export function createCliPrinter(command: string, options: CreateCliPrinterOptio
   return printer
 }
 
+function formatTerminalLink(text: string, url: string): string {
+  return `\u001B]8;;${url}\u001B\\${text}\u001B]8;;\u001B\\`
+}
+
 function createRichSyncReporter(printer: CliPrinter): SyncReporter {
   let stageSpinner = p.spinner()
   let syncProgress = p.progress({ max: 1 })
@@ -151,7 +164,7 @@ function createRichSyncReporter(printer: CliPrinter): SyncReporter {
   return {
     onStart(event) {
       const mode = event.mode ? ` in ${event.mode} mode` : ''
-      printer.step(`Starting sync for ${event.repo}${mode}.`)
+      printer.start(`Starting sync for ${event.repo}${mode}.`)
     },
     onStageStart(event) {
       if (isHiddenSyncStage(event.stage))
@@ -277,7 +290,7 @@ function createPlainSyncReporter(printer: CliPrinter, progressEvery: number): Sy
     },
     onError(event) {
       const stage = event.stage && !isHiddenSyncStage(event.stage) ? ` while ${describeStage(event.stage)}` : ''
-      printer.error(`Sync failed${stage}: ${toErrorMessage(event.error)}`)
+      printer.error(c.red(`Sync failed${stage}: ${toErrorMessage(event.error)}`))
     },
   }
 }
@@ -327,7 +340,7 @@ function createRichExecuteReporter(printer: CliPrinter): ExecuteReporter {
         hasApplyProgress = false
         return
       }
-      printer.error(message)
+      printer.error(c.red(message))
     },
   }
 }
@@ -346,7 +359,7 @@ function createPlainExecuteReporter(printer: CliPrinter): ExecuteReporter {
       printer.success(`${runMode} finished. Planned ${event.result.planned}, applied ${event.result.applied}, failed ${event.result.failed}.`)
     },
     onError(event) {
-      printer.error(`Execution failed: ${toErrorMessage(event.error)}`)
+      printer.error(c.red(`Execution failed: ${toErrorMessage(event.error)}`))
     },
   }
 }

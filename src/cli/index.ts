@@ -3,16 +3,17 @@ import { cac } from 'cac'
 import { registerExecuteCommand } from './commands/execute'
 import { registerStatusCommand } from './commands/status'
 import { registerSyncCommand } from './commands/sync'
+import { CLI_NAME, CLI_VERSION } from './meta'
 
 export function createCli() {
-  const cli = cac('ghfs')
+  const cli = cac(CLI_NAME)
 
   registerSyncCommand(cli)
   registerExecuteCommand(cli)
   registerStatusCommand(cli)
 
   cli.help()
-  cli.version('0.1.0')
+  cli.version(CLI_VERSION)
 
   return cli
 }

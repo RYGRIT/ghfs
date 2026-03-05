@@ -29,7 +29,6 @@ function setupSyncCommand(command: ReturnType<CAC['command']>): void {
     .option('--full', 'Full sync ignoring previous cursor')
     .action(withErrorHandling(async (options: SyncCommandOptions) => {
       const printer = createCliPrinter('sync')
-      printer.start('Preparing sync')
 
       const config = await resolveConfig()
       await ensureExecuteArtifacts(resolve(config.cwd, getExecuteFile(config)))
@@ -41,6 +40,8 @@ function setupSyncCommand(command: ReturnType<CAC['command']>): void {
         interactive: process.stdin.isTTY,
         selectRepoChoice: promptRepoChoice,
       })
+
+      printer.header(repo.repo)
 
       const token = await resolveAuthToken({
         token: config.auth.token,

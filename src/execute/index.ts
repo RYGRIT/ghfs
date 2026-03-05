@@ -62,6 +62,19 @@ export async function executePendingChanges(options: ExecuteOptions): Promise<Ex
     await ensureExecuteArtifacts(options.executeFilePath)
     const allOps = await readAndValidateExecuteFile(options.executeFilePath)
 
+    if (allOps.length === 0) {
+      return {
+        runId: createRunId(),
+        createdAt: new Date().toISOString(),
+        mode: 'dry-run',
+        repo: options.repo,
+        planned: 0,
+        applied: 0,
+        failed: 0,
+        details: [],
+      }
+    }
+
     const interactive = process.stdin.isTTY && !options.nonInteractive
     if (interactive && !options.prompts)
       throw new Error('Interactive execute prompts are unavailable. Use --non-interactive or provide prompts.')

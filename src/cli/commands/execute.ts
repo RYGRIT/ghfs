@@ -33,7 +33,6 @@ export function registerExecuteCommand(cli: CAC): void {
     .option('--continue-on-error', 'Continue applying ops after a failure')
     .action(withErrorHandling(async (options: ExecuteCommandOptions) => {
       const printer = createCliPrinter('execute')
-      printer.start('Preparing execute run')
 
       const config = await resolveConfig()
       const storageDirAbsolute = getStorageDirAbsolute(config)
@@ -46,6 +45,9 @@ export function registerExecuteCommand(cli: CAC): void {
         interactive,
         selectRepoChoice: promptRepoChoice,
       })
+
+      printer.header(repo.repo)
+      printer.start('Preparing execute run')
 
       const token = await resolveAuthToken({
         token: config.auth.token,
