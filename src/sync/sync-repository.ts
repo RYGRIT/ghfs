@@ -5,6 +5,7 @@ import { createGitHubClient } from '../github/client'
 import { loadSyncState, saveSyncState } from './state'
 import { fetchIssueCandidatesByNumbers, fetchIssueCandidatesByPagination } from './sync-repository-github'
 import { syncIssueCandidate } from './sync-repository-item'
+import { writeRepositoryIndexes, writeRepoSnapshot } from './sync-repository-snapshot'
 import { pruneMissingOpenTrackedItems, pruneTrackedClosedItems } from './sync-repository-storage'
 import { addItemStats, createCounters, normalizeIssueNumbers, resolveSince, shouldSyncIssue, splitRepo } from './sync-repository-utils'
 
@@ -28,6 +29,8 @@ export async function syncRepository(options: SyncOptions): Promise<SyncSummary>
     syncState,
     syncedAt,
   }
+
+  await writeRepoSnapshot(context)
 
   const candidates = targetNumbers
     ? await fetchIssueCandidatesByNumbers(context, targetNumbers)
@@ -57,6 +60,7 @@ export async function syncRepository(options: SyncOptions): Promise<SyncSummary>
     syncState.lastSince = since
   }
 
+  await writeRepositoryIndexes(context)
   await saveSyncState(storageDirAbsolute, syncState)
 
   return {
