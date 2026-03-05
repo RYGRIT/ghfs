@@ -42,18 +42,28 @@ describe('syncRepository', () => {
 
     const listForRepo = vi.fn()
     const listComments = vi.fn()
+    const listLabelsForRepo = vi.fn()
+    const listMilestones = vi.fn()
+    const reposGet = vi.fn(async () => ({
+      data: createRepositoryMetadata(),
+    }))
     const paginateCalls: Array<{ state: string, since?: string }> = []
 
     mockedCreateGitHubClient.mockReturnValue({
       rest: {
+        repos: {
+          get: reposGet,
+        },
         issues: {
           listForRepo,
           listComments,
+          listLabelsForRepo,
+          listMilestones,
         },
       },
-      paginate: vi.fn(async (method: unknown, params: { state: string, since?: string }) => {
+      paginate: vi.fn(async (method: unknown, params: Record<string, unknown>) => {
         if (method === listForRepo) {
-          paginateCalls.push({ state: params.state, since: params.since })
+          paginateCalls.push({ state: String(params.state), since: params.since as string | undefined })
           return [
             {
               number: 1,
@@ -71,6 +81,10 @@ describe('syncRepository', () => {
           ]
         }
         if (method === listComments)
+          return []
+        if (method === listLabelsForRepo)
+          return []
+        if (method === listMilestones)
           return []
         return []
       }),
@@ -93,6 +107,11 @@ describe('syncRepository', () => {
     const syncState = await loadSyncState(storageDir)
     expect(syncState.items['1']?.lastUpdatedAt).toBe('2026-01-10T00:00:00.000Z')
     expect(syncState.items['1']?.lastSyncedAt).toBe(summary.syncedAt)
+    expect(reposGet).toHaveBeenCalledTimes(1)
+
+    await expect(stat(join(storageDir, 'issues.md'))).resolves.toBeDefined()
+    await expect(stat(join(storageDir, 'pulls.md'))).resolves.toBeDefined()
+    await expect(stat(join(storageDir, 'repo.json'))).resolves.toBeDefined()
 
     await rm(cwd, { recursive: true, force: true })
   })
@@ -101,6 +120,11 @@ describe('syncRepository', () => {
     const cwd = await mkdtemp(join(tmpdir(), 'ghfs-sync-index-test-'))
     const listForRepo = vi.fn()
     const listComments = vi.fn()
+    const listLabelsForRepo = vi.fn()
+    const listMilestones = vi.fn()
+    const reposGet = vi.fn(async () => ({
+      data: createRepositoryMetadata(),
+    }))
     const pullsGet = vi.fn(async () => {
       return {
         data: {
@@ -117,9 +141,14 @@ describe('syncRepository', () => {
 
     mockedCreateGitHubClient.mockReturnValue({
       rest: {
+        repos: {
+          get: reposGet,
+        },
         issues: {
           listForRepo,
           listComments,
+          listLabelsForRepo,
+          listMilestones,
         },
         pulls: {
           get: pullsGet,
@@ -160,6 +189,10 @@ describe('syncRepository', () => {
         }
         if (method === listComments)
           return []
+        if (method === listLabelsForRepo)
+          return []
+        if (method === listMilestones)
+          return []
         return []
       }),
       request: vi.fn(),
@@ -186,6 +219,10 @@ describe('syncRepository', () => {
 
     await expect(stat(join(cwd, '.ghfs', 'issues', '00001-issue-1.md'))).rejects.toThrow()
     await expect(stat(join(cwd, '.ghfs', 'pulls', '00002-pr-2.md'))).resolves.toBeDefined()
+    await expect(stat(join(cwd, '.ghfs', 'issues.md'))).resolves.toBeDefined()
+    await expect(stat(join(cwd, '.ghfs', 'pulls.md'))).resolves.toBeDefined()
+    await expect(stat(join(cwd, '.ghfs', 'repo.json'))).resolves.toBeDefined()
+    expect(reposGet).toHaveBeenCalledTimes(1)
 
     await rm(cwd, { recursive: true, force: true })
   })
@@ -204,6 +241,29 @@ function createConfig(cwd: string, sync: Partial<GhfsResolvedConfig['sync']> = {
       pulls: sync.pulls ?? true,
       closed: sync.closed ?? 'existing',
       patches: sync.patches ?? 'open',
+    },
+  }
+}
+
+function createRepositoryMetadata() {
+  return {
+    name: 'repo',
+    full_name: 'owner/repo',
+    description: null,
+    private: false,
+    archived: false,
+    default_branch: 'main',
+    html_url: 'https://github.com/owner/repo',
+    fork: false,
+    open_issues_count: 1,
+    has_issues: true,
+    has_projects: true,
+    has_wiki: false,
+    created_at: '2026-01-01T00:00:00.000Z',
+    updated_at: '2026-01-02T00:00:00.000Z',
+    pushed_at: '2026-01-03T00:00:00.000Z',
+    owner: {
+      login: 'owner',
     },
   }
 }
