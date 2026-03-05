@@ -88,7 +88,8 @@ export default defineConfig({
 ## TODOs
 
 - [ ] `execute.md` file with human-friendly instructions (`close #123 #234`, `set-title #125 "New title"`).
-- [ ] Directly editing the `<5-digit-number>-<slug>.md` file to apply the operations.
+- [x] Directly editing the `<5-digit-number>-<slug>.md` file to apply the operations.
 - [ ] Add a VS Code extension for guided sync/execute.
 - [ ] Documentation.
+- [ ] Index page, and basic repo info
 - [ ] Agent Skills.
