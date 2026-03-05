@@ -76,11 +76,25 @@ describe('removePatchIfExists', () => {
     const dir = await mkdtemp(join(tmpdir(), 'ghfs-utils-fs-'))
     tempDirs.push(dir)
 
-    const patchPath = join(dir, 'pulls', '42.patch')
+    const patchPath = join(dir, 'pulls', '00042-some-pr.patch')
     await writeFileEnsured(patchPath, 'patch content')
 
     await expect(removePatchIfExists(dir, 42)).resolves.toBe(1)
     await expect(pathExists(patchPath)).resolves.toBe(false)
+  })
+
+  it('removes both current and legacy patch names for the same pull number', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ghfs-utils-fs-'))
+    tempDirs.push(dir)
+
+    const currentPatchPath = join(dir, 'pulls', '00042-some-pr.patch')
+    const legacyPatchPath = join(dir, 'pulls', '42.patch')
+    await writeFileEnsured(currentPatchPath, 'current')
+    await writeFileEnsured(legacyPatchPath, 'legacy')
+
+    await expect(removePatchIfExists(dir, 42)).resolves.toBe(2)
+    await expect(pathExists(currentPatchPath)).resolves.toBe(false)
+    await expect(pathExists(legacyPatchPath)).resolves.toBe(false)
   })
 
   it('returns 0 when patch file does not exist', async () => {

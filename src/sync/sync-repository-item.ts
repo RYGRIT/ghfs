@@ -104,6 +104,7 @@ async function syncPatchByPlan(
 
   if (patchPlan.shouldWritePatch) {
     const patch = await context.provider.fetchPullPatch(number)
+    await removePatchIfExists(context.storageDirAbsolute, number)
     await writeFileEnsured(patchPath, patch)
     patchesWritten += 1
   }

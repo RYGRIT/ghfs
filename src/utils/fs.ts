@@ -1,6 +1,7 @@
-import { access, mkdir, rename, rm, writeFile } from 'node:fs/promises'
-import { dirname } from 'pathe'
-import { getPrPatchPath } from '../sync/paths'
+import type { Dirent } from 'node:fs'
+import { access, mkdir, readdir, rename, rm, writeFile } from 'node:fs/promises'
+import { dirname, join } from 'pathe'
+import { getPullsDir } from '../sync/paths'
 
 export async function pathExists(path: string): Promise<boolean> {
   try {
@@ -27,9 +28,32 @@ export async function movePath(from: string, to: string): Promise<void> {
 }
 
 export async function removePatchIfExists(storageDirAbsolute: string, number: number): Promise<number> {
-  const patchPath = getPrPatchPath(storageDirAbsolute, number)
-  if (!await pathExists(patchPath))
+  const pullsDir = getPullsDir(storageDirAbsolute)
+
+  let entries: Dirent[]
+  try {
+    entries = await readdir(pullsDir, { withFileTypes: true })
+  }
+  catch {
     return 0
-  await removePath(patchPath)
-  return 1
+  }
+
+  const padded = String(number).padStart(5, '0')
+  let removed = 0
+
+  for (const entry of entries) {
+    if (!entry.isFile())
+      continue
+
+    const fileName = entry.name
+    const isLegacyPatch = fileName === `${number}.patch`
+    const isCurrentPatch = fileName.startsWith(`${padded}-`) && fileName.endsWith('.patch')
+    if (!isLegacyPatch && !isCurrentPatch)
+      continue
+
+    await removePath(join(pullsDir, fileName))
+    removed += 1
+  }
+
+  return removed
 }

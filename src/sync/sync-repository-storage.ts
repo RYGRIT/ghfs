@@ -32,7 +32,7 @@ export async function resolveIssuePaths(
     openPath,
     closedPath,
     targetPath,
-    patchPath: getPrPatchPath(storageDirAbsolute, number),
+    patchPath: getPrPatchPath(storageDirAbsolute, number, title),
     trackedPath,
     hasOpenFile,
     hasClosedFile,

@@ -48,6 +48,7 @@ export function getItemFileName(number: number, title: string): string {
   return `${padded}-${slug}.md`
 }
 
-export function getPrPatchPath(storageDirAbsolute: string, number: number): string {
-  return join(getPullsDir(storageDirAbsolute), `${number}.patch`)
+export function getPrPatchPath(storageDirAbsolute: string, number: number, title: string): string {
+  const markdownFileName = getItemFileName(number, title)
+  return join(getPullsDir(storageDirAbsolute), markdownFileName.replace(/\.md$/, '.patch'))
 }

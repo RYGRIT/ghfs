@@ -37,6 +37,6 @@ describe('sync paths', () => {
   })
 
   it('resolves pull patch path', () => {
-    expect(getPrPatchPath(root, 42)).toBe(join(root, 'pulls', '42.patch'))
+    expect(getPrPatchPath(root, 42, 'Add cache')).toBe(join(root, 'pulls', '00042-add-cache.patch'))
   })
 })
